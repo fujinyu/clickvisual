@@ -349,9 +349,9 @@ func InstanceFilterPms(uid int) (res []view.RespInstanceSimple, err error) {
 	// Fill in all database information and verify related permissions
 	is, _ := db.InstanceList(egorm.Conds{})
 	for _, i := range is {
-		if !InstanceViewIsPermission(uid, i.ID) {
-			continue
-		}
+		//if !InstanceViewIsPermission(uid, i.ID) {
+		//	continue
+		//}
 		iMap[i.ID] = view.RespInstanceSimple{
 			Id:           i.ID,
 			InstanceName: i.Name,

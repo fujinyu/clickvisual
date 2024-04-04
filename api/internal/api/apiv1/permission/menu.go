@@ -19,6 +19,7 @@ func MenuList(c *core.Context) {
 	res := make([]permission.MenuTreeItem, 0)
 	ins, _ := db.InstanceList(egorm.Conds{})
 	logFlag, alarmFlag, pandasFlag := false, false, false
+	logFlag = true
 	for _, row := range ins {
 		if !logFlag && service.InstanceViewPmsWithSubResource(c.Uid(), row.ID, pmsplugin.Log) {
 			logFlag = true

@@ -187,18 +187,18 @@ func GetStorageColumns(c *core.Context) {
 		c.JSONE(1, err.Error(), err)
 		return
 	}
-	if err = permission.Manager.CheckNormalPermission(view2.ReqPermission{
-		UserId:      c.Uid(),
-		ObjectType:  pmsplugin.PrefixInstance,
-		ObjectIdx:   strconv.Itoa(tableInfo.Database.Iid),
-		SubResource: pmsplugin.Log,
-		Acts:        []string{pmsplugin.ActView},
-		DomainType:  pmsplugin.PrefixTable,
-		DomainId:    strconv.Itoa(id),
-	}); err != nil {
-		c.JSONE(1, "permission verification failed", err)
-		return
-	}
+	//if err = permission.Manager.CheckNormalPermission(view2.ReqPermission{
+	//	UserId:      c.Uid(),
+	//	ObjectType:  pmsplugin.PrefixInstance,
+	//	ObjectIdx:   strconv.Itoa(tableInfo.Database.Iid),
+	//	SubResource: pmsplugin.Log,
+	//	Acts:        []string{pmsplugin.ActView},
+	//	DomainType:  pmsplugin.PrefixTable,
+	//	DomainId:    strconv.Itoa(id),
+	//}); err != nil {
+	//	c.JSONE(1, "permission verification failed", err)
+	//	return
+	//}
 	op, err := service.InstanceManager.Load(tableInfo.Database.Iid)
 	if err != nil {
 		c.JSONE(1, err.Error(), err)

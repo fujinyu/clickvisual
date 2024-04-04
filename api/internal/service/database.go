@@ -20,9 +20,9 @@ func DatabaseListFilterPms(uid int) (res []view2.RespDatabaseSimple, err error) 
 	// Fill in all database information and verify related permissions
 	ds, _ := db2.DatabaseList(invoker.Db, egorm.Conds{})
 	for _, d := range ds {
-		if !DatabaseViewIsPermission(uid, d.Iid, d.ID) {
-			continue
-		}
+		//if !DatabaseViewIsPermission(uid, d.Iid, d.ID) {
+		//	continue
+		//}
 		dMap[d.ID] = view2.RespDatabaseSimple{
 			Id:           d.ID,
 			Iid:          d.Iid,
@@ -45,9 +45,9 @@ func DatabaseListFilterPms(uid int) (res []view2.RespDatabaseSimple, err error) 
 		if !ok {
 			continue
 		}
-		if !TableViewIsPermission(uid, row.Database.Iid, row.ID) {
-			continue
-		}
+		//if !TableViewIsPermission(uid, row.Database.Iid, row.ID) {
+		//	continue
+		//}
 		respTableSimple := view2.RespTableSimple{
 			Id:              row.ID,
 			Did:             row.Database.ID,

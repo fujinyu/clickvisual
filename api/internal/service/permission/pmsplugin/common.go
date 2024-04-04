@@ -312,6 +312,14 @@ func GetAppSubResourceCnName(enSubR string) string {
 	return ""
 }
 
+func GetValidRoleStrByRoleItemV1(roleItem view.RoleItem) (res string, err error) {
+	res, err = Assemble2CasbinStr(PrefixRole, roleItem.RoleName, roleItem.BelongType, strconv.Itoa(roleItem.ReferId))
+	if err != nil {
+		return res, errors.Wrap(err, "invalid RoleItem")
+	}
+	return res, nil
+}
+
 func GetValidRoleStrByRoleItem(roleItem view.RoleItem) (res string, err error) {
 	res, err = Assemble2CasbinStr(PrefixRole, roleItem.RoleName, roleItem.BelongType, strconv.Itoa(roleItem.ReferId))
 	if err != nil {

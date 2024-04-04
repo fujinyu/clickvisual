@@ -183,41 +183,25 @@ function PmsDefaultRoles() {
       render: (_: any, record: any) => {
         return (
           <>
-            <Tooltip
-                title={i18n.formatMessage({
-                  id: "systemSetting.role.filtrate.roleAuthorization",
-                })}
-            >
-              <EditOutlined
-                  onClick={() => {
-                    CheckRoot().then((r) => {
-                      if (r.code !== 0) {
-                        message.error(r.msg);
-                        return;
-                      }
-                      handleGrantRoleId(record.id);
-                      handleGrantRoleUserVisible(true);
-                    });
-
-                    // CheckRoot().then((r) => {
-                    //   setLoad(
-                    //       message.loading(
-                    //           i18n.formatMessage({
-                    //             id: "spin",
-                    //           }),
-                    //           0
-                    //       )
-                    //   );
-                    //   if (r.code !== 0) {
-                    //     message.error(r.msg);
-                    //     return;
-                    //   }
-                    //   editorRole(record.id);
-                    // });
-                  }}
-              />
-            </Tooltip>
-
+            {/*<Tooltip*/}
+            {/*    title={i18n.formatMessage({*/}
+            {/*      id: "systemSetting.role.filtrate.roleAuthorization",*/}
+            {/*    })}*/}
+            {/*>*/}
+            {/*  <EditOutlined*/}
+            {/*      onClick={() => {*/}
+            {/*        CheckRoot().then((r) => {*/}
+            {/*          if (r.code !== 0) {*/}
+            {/*            message.error(r.msg);*/}
+            {/*            return;*/}
+            {/*          }*/}
+            {/*          handleGrantRoleId(record.id);*/}
+            {/*          handleGrantRoleUserVisible(true);*/}
+            {/*        });*/}
+            {/*      }}*/}
+            {/*  />*/}
+            {/*</Tooltip>*/}
+            <Divider type="vertical" />
             <Tooltip
               title={i18n.formatMessage({
                 id: "edit",
@@ -379,26 +363,6 @@ function PmsDefaultRoles() {
                     })}
                   </Button>
 
-                </Form.Item>
-                <Form.Item>
-                  <Button
-                      type="primary"
-                      onClick={() => {
-                        CheckRoot().then((r) => {
-                          if (r.code !== 0) {
-                            message.error(r.msg);
-                            return;
-                          }
-                          handleGrantRoleUserVisible(true);
-                        });
-                      }}
-                  >
-
-                    <PlusOutlined />
-                    {i18n.formatMessage({
-                      id: "systemSetting.role.filtrate.roleAuthority",
-                    })}
-                  </Button>
                 </Form.Item>
               </Form>
             </div>

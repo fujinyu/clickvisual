@@ -91,7 +91,29 @@ func (p *pms) GrantRoles2User(userId []int, roleId int) (err error) {
 		DomainType: "",
 		DomainId:   0,
 	})
-	return p.AssignRoles2User(fmt.Sprintf("%s", userId), appDefaultRoles)
+	return p.AssignRoles2UserV1(fmt.Sprintf("%s", userId), appDefaultRoles)
+}
+
+func (p *pms) AssignRoles2UserV1(userId string, reqRoles []view.RoleItem) (err error) {
+	if userId == "" {
+		return errors.New("userId cannot be empty")
+	}
+	userStr, _ := pmsplugin.Assemble2CasbinStr(pmsplugin.PrefixUser, userId)
+	for _, roleItem := range reqRoles {
+		roleStr, err := pmsplugin.GetValidRoleStrByRoleItemV1(roleItem)
+		if err != nil {
+			elog.Warn("invalid roleString", zap.Error(err))
+			continue
+		}
+
+		var gType = pmsplugin.RuleTypeG
+		var targetDom string
+
+		if _, err := pmsplugin.AddRule(gType, userStr, roleStr, targetDom); err != nil {
+			elog.Warn("assign role to user error", zap.String("role", roleStr), zap.Error(err))
+		}
+	}
+	return nil
 }
 
 // AssignRoles2User - assign roles to specific user
