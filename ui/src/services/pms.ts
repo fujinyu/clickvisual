@@ -32,8 +32,19 @@ export async function reqRootUids() {
   return request(process.env.PUBLIC_PATH + `api/v1/pms/root/uids`);
 }
 
+export async function reqRoleUids(roleId:any) {
+  return request(process.env.PUBLIC_PATH + `api/v1/pms/role/uids/`+roleId);
+}
+
 export async function reqGrantRootUids(params: any) {
   return request(process.env.PUBLIC_PATH + "api/v1/pms/root/grant", {
+    method: "POST",
+    data: { ...params },
+  });
+}
+
+export async function reqGrantRoleUids(roleId:any,params: any) {
+  return request(process.env.PUBLIC_PATH + "api/v1/pms/role/grant/"+roleId, {
     method: "POST",
     data: { ...params },
   });

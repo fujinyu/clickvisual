@@ -196,6 +196,23 @@ func GetRootUids(c *core.Context) {
 
 }
 
+func GetRoleUids(c *core.Context) {
+	if err := permission.Manager.IsRootUser(c.Uid()); err != nil {
+		c.JSONE(1, "permission verification failed", err)
+		return
+	}
+	roleId := cast.ToInt(c.Param("id"))
+	if roleId == 0 {
+		c.JSONE(1, "无效的角色Id. ", nil)
+		return
+	}
+	rootUids := []int{}
+	//rootUids := permission.Manager.GetRootUsersId()
+	resp := view.RootUsers{RootUids: rootUids}
+	c.JSONOK(resp)
+
+}
+
 // @Tags         PREMISSION
 func GrantRootUids(c *core.Context) {
 	if err := permission.Manager.IsRootUser(c.Uid()); err != nil {
@@ -210,5 +227,28 @@ func GrantRootUids(c *core.Context) {
 		return
 	}
 	permission.Manager.GrantRootUsers(reqModel.RootUids)
+	c.JSONOK()
+}
+
+func GrantRoleUids(c *core.Context) {
+	if err := permission.Manager.IsRootUser(c.Uid()); err != nil {
+		c.JSONE(1, "permission verification failed", err)
+		return
+	}
+
+	roleId := cast.ToInt(c.Param("id"))
+	if roleId == 0 {
+		c.JSONE(1, "无效的角色Id. ", nil)
+		return
+	}
+
+	var err error
+	reqModel := view.RootUsers{}
+	err = c.Bind(&reqModel)
+	if err != nil {
+		c.JSONE(1, err.Error(), nil)
+		return
+	}
+	permission.Manager.GrantRoles2User(reqModel.RootUids, roleId)
 	c.JSONOK()
 }

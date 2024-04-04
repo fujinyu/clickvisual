@@ -1,6 +1,7 @@
 import { message } from "antd";
 import { useIntl } from "umi";
-import { reqCreatePmsDefaultRole, reqGrantRootUids } from "@/services/pms";
+import {reqCreatePmsDefaultRole, reqGrantRoleUids, reqGrantRootUids} from "@/services/pms";
+
 
 const useRole = () => {
   const i18n = useIntl();
@@ -60,6 +61,36 @@ const useRole = () => {
       return false;
     }
   };
-  return { handleCreate, handleGrantUsers };
+
+  const handleRoleGrantUsers = async (roleId:number,values: any) => {
+    const hide = message.loading(
+        i18n.formatMessage({ id: "hooks.role.authorization.ing" })
+    );
+    try {
+      const resp = await reqGrantRoleUids(roleId,{ ...values });
+      if (resp.code !== 0) {
+        hide();
+        message.error(
+            `${i18n.formatMessage({ id: "hooks.role.authorization.failure" })}. ${
+                resp.msg
+            }`
+        );
+        return true;
+      }
+      hide();
+      message.success(
+          i18n.formatMessage({ id: "hooks.role.authorization.success" })
+      );
+      return true;
+    } catch (error) {
+      hide();
+      message.error(
+          i18n.formatMessage({ id: "hooks.role.authorization.failure.tips" })
+      );
+      return false;
+    }
+  };
+
+  return { handleCreate, handleGrantUsers,handleRoleGrantUsers };
 };
 export default useRole;

@@ -808,10 +808,12 @@ export default {
   "systemSetting.role.filtrate.label.name": "Name",
   "systemSetting.role.filtrate.clear": "Removal of conditions",
   "systemSetting.role.filtrate.rootAuthority": "Root authority",
+  "systemSetting.role.filtrate.roleAuthority": "Role authority",
   "systemSetting.role.filtrate.createDefaultRole": "Creating a Default Role",
   "systemSetting.role.filtrate.superAdministratorAuthorization":
     "Super Administrator Authorization",
-
+  "systemSetting.role.filtrate.roleAuthorization":
+      "Role Authorization",
   // sys -> role -> CollapseX
   "systemSetting.role.collapseX.unfold": "Unfold",
   "systemSetting.role.collapseX.packUp": "Pack up",
@@ -838,6 +840,7 @@ export default {
 
   // sys -> role -> RootUserForm
   "systemSetting.role.rootUserForm.superAdministrator": "Super administrator",
+  "systemSetting.role.rootUserForm.admin": "administrator",
   "systemSetting.role.rootUserForm.superAdministrator.rules":
     "Please select at least one user!",
 

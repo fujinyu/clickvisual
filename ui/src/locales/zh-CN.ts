@@ -763,10 +763,12 @@ export default {
   "systemSetting.role.filtrate.label.name": "角色名",
   "systemSetting.role.filtrate.clear": "清空条件",
   "systemSetting.role.filtrate.rootAuthority": "root授权",
+  "systemSetting.role.filtrate.roleAuthority": "角色授权",
   "systemSetting.role.filtrate.createDefaultRole": "创建默认角色",
   "systemSetting.role.filtrate.superAdministratorAuthorization":
     "超级管理员授权",
-
+  "systemSetting.role.filtrate.roleAuthorization":
+      "角色授权",
   // sys -> role -> CollapseX
   "systemSetting.role.collapseX.unfold": "展开",
   "systemSetting.role.collapseX.packUp": "收起",
@@ -788,6 +790,7 @@ export default {
 
   // sys -> role -> RootUserForm
   "systemSetting.role.rootUserForm.superAdministrator": "超级管理员",
+  "systemSetting.role.rootUserForm.admin": "管理员",
   "systemSetting.role.rootUserForm.superAdministrator.rules":
     "请至少选择一个用户!",
 

@@ -57,6 +57,43 @@ func (p *pms) AddUsers2AppRoles(rolesWithUsers *[]view.AppRoleInfoItem) {
 	}
 }
 
+func (p *pms) GrantRoles2User(userId []int, roleId int) (err error) {
+	roleInfo, err := db2.PmsRoleInfo(roleId)
+	var appDefaultRoles = make([]view.RoleItem, 0)
+
+	details := make([]view.RolePmsDetail, 0)
+	for _, detail := range roleInfo.Details {
+		subResourceArr1 := []string{}
+		err := jsoniter.UnmarshalFromString(detail.SubResources, &subResourceArr1)
+		if err != nil {
+			elog.Error("grant", elog.Any("err", err))
+		}
+
+		actArr1 := []string{}
+		err = jsoniter.UnmarshalFromString(detail.Acts, &actArr1)
+		if err != nil {
+			elog.Error("grant", elog.Any("err", err))
+		}
+
+		details = append(details, view.RolePmsDetail{
+			SubResources: subResourceArr1,
+			Acts:         actArr1,
+		})
+	}
+
+	appDefaultRoles = append(appDefaultRoles, view.RoleItem{
+		BelongType: pmsplugin.PrefixInstance,
+		ReferId:    0,
+		ReferGroup: "",
+		RoleName:   roleInfo.Name,
+		RoleDesc:   roleInfo.Desc,
+		PmsDetails: details,
+		DomainType: "",
+		DomainId:   0,
+	})
+	return p.AssignRoles2User(fmt.Sprintf("%s", userId), appDefaultRoles)
+}
+
 // AssignRoles2User - assign roles to specific user
 func (p *pms) AssignRoles2User(userId string, reqRoles []view.RoleItem) (err error) {
 	if userId == "" {

@@ -2,6 +2,7 @@ import useRequest from "@/hooks/useRequest/useRequest";
 import ItemForm from "@/pages/SystemSetting/Role/components/ItemForm";
 import RoleModel from "@/pages/SystemSetting/Role/components/RoleModel";
 import RootUserForm from "@/pages/SystemSetting/Role/components/RootUserForm";
+import RoleUserForm from "@/pages/SystemSetting/Role/components/RoleUserForm";
 import SearchTable, {
   SearchTableInstance,
 } from "@/pages/SystemSetting/Role/components/SearchTable";
@@ -46,8 +47,12 @@ function PmsDefaultRoles() {
     useState<boolean>(false);
   const [grantRootUserVisible, handleGrantRootUserVisible] =
     useState<boolean>(false);
+  const [grantRoleUserVisible, handleGrantRoleUserVisible] =
+      useState<boolean>(false);
+  const [grantRoleId, handleGrantRoleId] =
+      useState<number>(0);
   const [form] = Form.useForm();
-  const { handleCreate, handleGrantUsers } = useRole();
+  const { handleCreate, handleGrantUsers,handleRoleGrantUsers } = useRole();
   const deleteRole = useRequest(reqDeleteRole, {
     loadingText: {
       loading: undefined,
@@ -178,6 +183,41 @@ function PmsDefaultRoles() {
       render: (_: any, record: any) => {
         return (
           <>
+            <Tooltip
+                title={i18n.formatMessage({
+                  id: "systemSetting.role.filtrate.roleAuthorization",
+                })}
+            >
+              <EditOutlined
+                  onClick={() => {
+                    CheckRoot().then((r) => {
+                      if (r.code !== 0) {
+                        message.error(r.msg);
+                        return;
+                      }
+                      handleGrantRoleId(record.id);
+                      handleGrantRoleUserVisible(true);
+                    });
+
+                    // CheckRoot().then((r) => {
+                    //   setLoad(
+                    //       message.loading(
+                    //           i18n.formatMessage({
+                    //             id: "spin",
+                    //           }),
+                    //           0
+                    //       )
+                    //   );
+                    //   if (r.code !== 0) {
+                    //     message.error(r.msg);
+                    //     return;
+                    //   }
+                    //   editorRole(record.id);
+                    // });
+                  }}
+              />
+            </Tooltip>
+
             <Tooltip
               title={i18n.formatMessage({
                 id: "edit",
@@ -333,10 +373,30 @@ function PmsDefaultRoles() {
                         handleGrantRootUserVisible(true);
                       });
                     }}
-                  >
-                    <PlusOutlined />
+                  ><PlusOutlined />
                     {i18n.formatMessage({
                       id: "systemSetting.role.filtrate.rootAuthority",
+                    })}
+                  </Button>
+
+                </Form.Item>
+                <Form.Item>
+                  <Button
+                      type="primary"
+                      onClick={() => {
+                        CheckRoot().then((r) => {
+                          if (r.code !== 0) {
+                            message.error(r.msg);
+                            return;
+                          }
+                          handleGrantRoleUserVisible(true);
+                        });
+                      }}
+                  >
+
+                    <PlusOutlined />
+                    {i18n.formatMessage({
+                      id: "systemSetting.role.filtrate.roleAuthority",
                     })}
                   </Button>
                 </Form.Item>
@@ -377,6 +437,25 @@ function PmsDefaultRoles() {
         }}
         onCancel={() => handleGrantRootUserVisible(false)}
         modalVisible={grantRootUserVisible}
+      />
+      <RoleUserForm
+          formTitle={i18n.formatMessage({
+            id: "systemSetting.role.filtrate.roleAuthorization",
+          })}
+          onSubmit={async (value: any) => {
+            var roleId=grantRoleId;
+            const success = handleRoleGrantUsers(roleId,value);
+            if (await success) {
+              handleGrantRoleUserVisible(false);
+              if (actionRef.current) {
+                actionRef.current.refresh();
+                location.reload();
+              }
+            }
+          }}
+          onCancel={() => handleGrantRoleUserVisible(false)}
+          roleId={grantRoleId}
+          modalVisible={grantRoleUserVisible}
       />
       <RoleModel />
     </div>
