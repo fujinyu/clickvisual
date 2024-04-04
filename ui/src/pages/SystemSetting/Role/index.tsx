@@ -183,24 +183,6 @@ function PmsDefaultRoles() {
       render: (_: any, record: any) => {
         return (
           <>
-            {/*<Tooltip*/}
-            {/*    title={i18n.formatMessage({*/}
-            {/*      id: "systemSetting.role.filtrate.roleAuthorization",*/}
-            {/*    })}*/}
-            {/*>*/}
-            {/*  <EditOutlined*/}
-            {/*      onClick={() => {*/}
-            {/*        CheckRoot().then((r) => {*/}
-            {/*          if (r.code !== 0) {*/}
-            {/*            message.error(r.msg);*/}
-            {/*            return;*/}
-            {/*          }*/}
-            {/*          handleGrantRoleId(record.id);*/}
-            {/*          handleGrantRoleUserVisible(true);*/}
-            {/*        });*/}
-            {/*      }}*/}
-            {/*  />*/}
-            {/*</Tooltip>*/}
             <Divider type="vertical" />
             <Tooltip
               title={i18n.formatMessage({
