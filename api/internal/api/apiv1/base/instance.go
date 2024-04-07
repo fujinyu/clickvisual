@@ -263,3 +263,7 @@ func InstanceTest(c *core.Context) {
 	}
 	c.JSONOK()
 }
+
+func Ping(c *core.Context) {
+	c.JSONOK()
+}

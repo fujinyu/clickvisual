@@ -61,6 +61,8 @@ func v1(r *gin.RouterGroup) {
 	r.PATCH("/sys/instances/:id", core.Handle(base.InstanceUpdate))
 	r.DELETE("/sys/instances/:id", core.Handle(base.InstanceDelete))
 	r.GET("/instances/:iid/columns-self-built", core.Handle(base.TableColumnsSelfBuilt))
+	//Check
+	r.GET("/sys/ping", core.Handle(base.Ping))
 	// Database
 	r.PATCH("/databases/:id", core.Handle(base.DatabaseUpdate))
 	r.DELETE("/databases/:id", core.Handle(base.DatabaseDelete))

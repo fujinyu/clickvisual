@@ -60,17 +60,17 @@ fi
 # gather buildinfo if not already provided
 # For a release build BUILDINFO should be produced
 # at the beginning of the build and used throughout
-if [[ -z ${BUILDINFO} ]];then
-    BUILDINFO=$(mktemp)
-    "${SCRIPTPATH}/report_build_info.sh"  ${APP_NAME} > "${BUILDINFO}"
-fi
+#if [[ -z ${BUILDINFO} ]];then
+#    BUILDINFO=$(mktemp)
+#    "${SCRIPTPATH}/report_build_info.sh"  ${APP_NAME} > "${BUILDINFO}"
+#fi
 
 # BUILD LD_EXTRAFLAGS
 LD_EXTRAFLAGS=""
 
 while read -r line; do
     LD_EXTRAFLAGS="${LD_EXTRAFLAGS} -X ${line}"
-done < "${BUILDINFO}"
+#done < "${BUILDINFO}"
 
 # verify go version before build
 # NB. this was copied verbatim from Kubernetes hack
@@ -87,6 +87,8 @@ fi
 
 #echo time ${GOBINARY} build ${V} ${GOBUILDFLAGS} ${GCFLAGS:+-gcflags "${GCFLAGS}"} -o ${OUT} \
 #       -pkgdir=${GOPKG}/${GOOS}_${GOARCH} -ldflags "${LDFLAGS} ${LD_EXTRAFLAGS}"
-time ${GOBINARY} build ${V} ${GOBUILDFLAGS} ${GCFLAGS:+-gcflags "${GCFLAGS}"} -o ${OUT} \
-       -pkgdir=${GOPKG}/${GOOS}_${GOARCH} -ldflags "${LDFLAGS} ${LD_EXTRAFLAGS}"
-#time GOOS=${GOOS} GOARCH=${GOARCH} ${GOBINARY} build ${V} ${GOBUILDFLAGS} ${GCFLAGS:+-gcflags "${GCFLAGS}"} -o ${OUT} \
+echo `${GOBINARY} build ${V} ${GOBUILDFLAGS} ${GCFLAGS:+-gcflags "${GCFLAGS}"} -o ${OUT} -pkgdir=${GOPKG}/${GOOS}_${GOARCH} -ldflags "${LDFLAGS} ${LD_EXTRAFLAGS}"`
+${GOBINARY} build ${V} ${GOBUILDFLAGS} ${GCFLAGS:+-gcflags "${GCFLAGS}"} -o ${OUT} -pkgdir=${GOPKG}/${GOOS}_${GOARCH} -ldflags "${LDFLAGS} ${LD_EXTRAFLAGS}"
+
+
+

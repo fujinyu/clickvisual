@@ -10,7 +10,7 @@ WORKDIR /clickvisual
 COPY go.mod go.sum ./
 RUN go mod download -x
 COPY . .
-RUN ls -rlt ./api/internal/ui/dist && make build.api
+RUN go build -o ./bin/clickvisual
 
 
 # Fianl running stage
