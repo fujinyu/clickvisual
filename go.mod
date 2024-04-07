@@ -31,6 +31,7 @@ require (
 	github.com/gotomicro/unittest v0.0.1
 	github.com/jinzhu/gorm v1.9.16
 	github.com/jonboulle/clockwork v0.3.0
+	github.com/json-iterator/go v1.1.12
 	github.com/link-duan/go-redoc v1.0.1
 	github.com/link-duan/toml v0.3.2
 	github.com/panjf2000/ants v1.3.0
@@ -153,7 +154,6 @@ require (
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
-	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/jtolds/gls v4.20.0+incompatible // indirect
 	github.com/klauspost/compress v1.16.3 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.4 // indirect

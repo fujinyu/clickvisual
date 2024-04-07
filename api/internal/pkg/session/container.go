@@ -44,7 +44,7 @@ func (c *Container) Build(options ...Option) gin.HandlerFunc {
 	var err error
 	switch c.config.Mode {
 	case "redis":
-		store, err = redis.NewStore(c.config.RedisSize, c.config.RedisNetwork, c.config.RedisAddr, c.config.RedisPassword, []byte(c.config.Keypairs))
+		store, err = redis.NewStoreWithDB(c.config.RedisSize, c.config.RedisNetwork, c.config.RedisAddr, c.config.RedisPassword, c.config.RedisDb, []byte(c.config.Keypairs))
 		if err != nil {
 			c.logger.Panic("config new store panic", elog.FieldErr(err))
 		}

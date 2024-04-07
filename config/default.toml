@@ -1,5 +1,5 @@
 [app]
-isMultiCopy = false  # multi-copy mode: Redis must be configured, otherwise the service cannot start
+isMultiCopy = true  # multi-copy mode: Redis must be configured, otherwise the service cannot start
 secretKey = "secretKey"
 rootURL = "http://localhost:9001"
 baseURL = "/api/admin/login/"
@@ -26,9 +26,10 @@ debug = true
 # if isMultiCopy is true
 [redis]
 debug = false
-addr = "172.16.20.3:37652"
+db=10
+addr = "r-bp19a6f117d96e84.redis.rds.aliyuncs.com:6379"
 writeTimeout = "3s"
-password = "tkaYattmf7nJDnyb"
+password = "VFBAmtMnOoG6GLqz"
 
 [mysql]
 debug = true
@@ -52,10 +53,11 @@ name = "clickvisual_session"
 debug = true
 Keypairs = "secret"
 # if use mode redis
+redisDb=10
 redisSize = 10
 redisNetwork = "tcp"
-redisAddr = "172.16.20.3:37652"
-redisPassword = "tkaYattmf7nJDnyb"
+redisAddr = "r-bp19a6f117d96e84.redis.rds.aliyuncs.com:6379"
+redisPassword = "VFBAmtMnOoG6GLqz"
 
 [auth.anonymous]
 # enable anonymous access
