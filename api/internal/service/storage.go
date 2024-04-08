@@ -116,33 +116,17 @@ func (s *srvStorage) CreateByILogtailTemplate(uid int, databaseInfo db2.BaseData
 		Days:                    param.Days,
 		Brokers:                 param.Brokers,
 		Consumers:               1,
-		KafkaSkipBrokenMessages: 1000,
+		KafkaSkipBrokenMessages: 10,
 		Source: `{
-    "contents": {
-        "_source_": "stderr",
-        "_time_": "2023-04-17T04:07:17.624075074Z",
-        "content": "{\"lv\":\"debug\",\"ts\":1681704437,\"msg\":\"presigned get object URL\"}"
-    },
-    "tags": {  
-        "container.image.name": "xxx",
-        "container.ip": "127.0.0.1",
-        "container.name": "xx-xx",
-        "host.ip": "127.0.0.1",
-        "host.name": "xx-xx-xx",
-        "log.file.path": "xx-xx-xx",
-        "k8s.namespace.name": "default",
-        "k8s.node.ip": "127.0.0.1",
-        "k8s.node.name": "127.0.0.1",
-        "k8s.pod.name": "xx-xx-xx-xx",
-        "k8s.pod.uid": "xx-xx-xx-xx-xx"
-    },
-    "time": 1681704438
-}`,
-		DatabaseId:        databaseInfo.ID,
-		TimeField:         "_time_",
-		TimeFieldParent:   "contents",
-		RawLogField:       "content",
-		RawLogFieldParent: "contents",
+    		"content": "asaaaa",
+    		"host.ip": "172.16.107.114",
+    		"host.name": "izbp1cnvpgp38p9tq2cpxfz",
+    		"log.file.path": "/home/fc/logs/lbs-sync/lbs-sync.log",
+    		"time": 1711895744
+		}`,
+		DatabaseId:  databaseInfo.ID,
+		TimeField:   "time",
+		RawLogField: "content",
 	}
 	cp.Topics = param.Topic
 	cp.TableName = param.Name
