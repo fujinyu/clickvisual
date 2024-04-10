@@ -57,4 +57,4 @@ ossutil64.1
 obsutil_linux_amd64*/
 .github
 .githooks
-
+go.sum
