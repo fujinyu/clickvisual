@@ -359,6 +359,7 @@ func TableLogs(c *core.Context) {
 	st := time.Now()
 	var param view.ReqQuery
 	err := c.Bind(&param)
+
 	if err != nil {
 		c.JSONE(core.CodeErr, "invalid parameter", err)
 		return
@@ -368,7 +369,10 @@ func TableLogs(c *core.Context) {
 		c.JSONE(core.CodeErr, "params error", nil)
 		return
 	}
+	param.BY = c.Query("by")
+
 	tableInfo, _ := db.TableInfo(invoker.Db, id)
+
 	// default time field
 	param.TimeField = db.TimeFieldSecond
 	if tableInfo.CreateType == constx.TableCreateTypeExist && tableInfo.TimeField != "" {

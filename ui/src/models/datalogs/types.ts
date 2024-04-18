@@ -13,6 +13,7 @@ export interface QueryParams {
   st?: number;
   et?: number;
   kw?: string;
+  by?: string;
   filters?: string[];
 }
 
@@ -26,6 +27,7 @@ export type PaneType = {
   activeTabKey?: string;
   activeIndex?: number;
   queryType?: string;
+  by?: string;
   page?: number;
   pageSize?: number;
   logs: LogsResponse | undefined;

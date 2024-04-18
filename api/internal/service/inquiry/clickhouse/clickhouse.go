@@ -2059,27 +2059,33 @@ func (c *ClickHouseX) logsSQL(param view.ReqQuery, tid int) (sql, optSQL, origin
 	views, _ := db.ViewList(invoker.Db, conds)
 	c1 := time.Since(st).Milliseconds()
 	orderByField := param.TimeField
+	orderBy := param.BY
+	if orderBy == "" {
+		orderBy = "desc"
+	}
 	if len(views) > 0 {
 		orderByField = db.TimeFieldNanoseconds
 	}
 	selectFields := genSelectFields(tid)
 	c2 := time.Since(st).Milliseconds()
+
+	//屏蔽了。优化没什么用
 	// Request for the first 100 pages of data
 	// optimizing, the idea is to reduce the number of fields involved in operation;
-	if param.Page*param.PageSize <= 100 {
-		timeFieldEqual := c.timeFieldEqual(param, tid)
-		if timeFieldEqual != "" {
-			optSQL = fmt.Sprintf("SELECT %s FROM %s WHERE %s %s ORDER BY "+orderByField+" DESC LIMIT %d OFFSET %d",
-				selectFields,
-				param.DatabaseTable,
-				timeFieldEqual,
-				c.queryTransform(param, true),
-				param.PageSize, (param.Page-1)*param.PageSize)
-		}
-	}
+	//if param.Page*param.PageSize <= 100 {
+	//	timeFieldEqual := c.timeFieldEqual(param, tid)
+	//	if timeFieldEqual != "" {
+	//		optSQL = fmt.Sprintf("SELECT %s FROM %s WHERE %s %s ORDER BY "+orderByField+" "+orderBy+"  LIMIT %d OFFSET %d",
+	//			selectFields,
+	//			param.DatabaseTable,
+	//			timeFieldEqual,
+	//			c.queryTransform(param, true),
+	//			param.PageSize, (param.Page-1)*param.PageSize)
+	//	}
+	//}
 	c3 := time.Since(st).Milliseconds()
 	originalWhere = c.queryTransform(param, false)
-	sql = fmt.Sprintf("SELECT %s FROM %s WHERE "+genTimeCondition(param)+" %s ORDER BY "+orderByField+" DESC LIMIT %d OFFSET %d",
+	sql = fmt.Sprintf("SELECT %s FROM %s WHERE "+genTimeCondition(param)+" %s ORDER BY "+orderByField+" "+orderBy+"  LIMIT %d OFFSET %d",
 		selectFields,
 		param.DatabaseTable,
 		param.ST, param.ET,

@@ -41,6 +41,7 @@ export interface UrlStateType {
   tab: string | number;
   index: string | number;
   queryType?: string;
+  by?: string;
   mode?: number;
   logState?: number;
 }
@@ -75,6 +76,7 @@ export default function useLogUrlParams() {
     tab: TimeRangeType.Relative,
     index: ACTIVE_TIME_INDEX,
     queryType: QueryTypeEnum.LOG,
+    by: "asc",
   });
   const { timeOptions, handleChangeRelativeAmountAndUnit } = useTimeOptions();
 
@@ -186,6 +188,7 @@ export default function useLogUrlParams() {
         isTid ? urlState?.logState : lastDataLogsState.logState
       ),
       relTraceTableId: res.data.traceTableId,
+      by: urlState.by
     };
     addLogPane(pane.paneId, pane);
     onChangeLogPane(pane);
@@ -222,6 +225,7 @@ export default function useLogUrlParams() {
             kw: pane.keyword,
             page: pane.page,
             pageSize: pane.pageSize,
+            by: pane.by,
           },
           analysisField: columsArr,
         })

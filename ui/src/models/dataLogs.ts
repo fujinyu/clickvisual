@@ -63,6 +63,8 @@ const DataLogsModel = () => {
   const [startDateTime, setStartDateTime] = useState<number>();
   // 日志结束时间
   const [endDateTime, setEndDateTime] = useState<number>();
+  // 日志结束时间
+  const [orderBy, setOrderBy] = useState<string>();
   // 分页参数
 
   const [pageSize, setPageSize] = useState<number>(10);
@@ -224,7 +226,9 @@ const DataLogsModel = () => {
   const onChangeKeywordInput = (value: string | undefined) => {
     setKeywordInput(value);
   };
-
+  const onChangeOrderBy = (value: string | undefined) => {
+    setOrderBy(value);
+  };
   const onChangeStartDateTime = (TimeStamp: number) => {
     setStartDateTime(TimeStamp);
   };
@@ -344,6 +348,7 @@ const DataLogsModel = () => {
     onChangeLogFieldsIndexList(tabPane?.logFieldsIndexList);
     setHighChartList(tabPane?.highCharts?.histograms ?? []);
     setLogCount(tabPane?.highCharts?.count || tabPane?.logs?.count || 0);
+    onChangeOrderBy(tabPane?.by as string);
     logPanesHelper.updateLogPane(tabPane.paneId, tabPane, panes);
     statisticalChartsHelper.setActiveQueryType(
       tabPane?.queryType ?? QueryTypeEnum.LOG
@@ -504,6 +509,7 @@ const DataLogsModel = () => {
       query: params?.kw ?? keywordInput,
       pageSize: params?.pageSize || pageSize,
       page: params?.page || currentPage,
+      by: params?.by || orderBy,
       filters: filters || [],
       isQueryCount: Number(!histogramChecked),
     };
