@@ -1,8 +1,6 @@
 package base
 
 import (
-	"strconv"
-
 	"github.com/ego-component/egorm"
 	"github.com/spf13/cast"
 
@@ -11,8 +9,6 @@ import (
 	db2 "github.com/clickvisual/clickvisual/api/internal/pkg/model/db"
 	view2 "github.com/clickvisual/clickvisual/api/internal/pkg/model/view"
 	"github.com/clickvisual/clickvisual/api/internal/pkg/utils"
-	"github.com/clickvisual/clickvisual/api/internal/service/permission"
-	"github.com/clickvisual/clickvisual/api/internal/service/permission/pmsplugin"
 )
 
 // @Tags         LOGSTORE
@@ -30,23 +26,23 @@ func HiddenUpsert(c *core.Context) {
 		c.JSONE(core.CodeErr, "param error:"+err.Error(), nil)
 		return
 	}
-	tableInfo, err := db2.TableInfo(invoker.Db, tid)
-	if err != nil {
-		c.JSONE(1, err.Error(), nil)
-		return
-	}
-	if err = permission.Manager.CheckNormalPermission(view2.ReqPermission{
-		UserId:      c.Uid(),
-		ObjectType:  pmsplugin.PrefixInstance,
-		ObjectIdx:   strconv.Itoa(tableInfo.Database.Iid),
-		SubResource: pmsplugin.Log,
-		Acts:        []string{pmsplugin.ActEdit},
-		DomainType:  pmsplugin.PrefixTable,
-		DomainId:    strconv.Itoa(tid),
-	}); err != nil {
-		c.JSONE(1, "permission verification failed", err)
-		return
-	}
+	//tableInfo, err := db2.TableInfo(invoker.Db, tid)
+	//if err != nil {
+	//	c.JSONE(1, err.Error(), nil)
+	//	return
+	//}
+	//if err = permission.Manager.CheckNormalPermission(view2.ReqPermission{
+	//	UserId:      c.Uid(),
+	//	ObjectType:  pmsplugin.PrefixInstance,
+	//	ObjectIdx:   strconv.Itoa(tableInfo.Database.Iid),
+	//	SubResource: pmsplugin.Log,
+	//	Acts:        []string{pmsplugin.ActEdit},
+	//	DomainType:  pmsplugin.PrefixTable,
+	//	DomainId:    strconv.Itoa(tid),
+	//}); err != nil {
+	//	c.JSONE(1, "permission verification failed", err)
+	//	return
+	//}
 
 	conds := egorm.Conds{"tid": egorm.Cond{
 		Op:  "=",
