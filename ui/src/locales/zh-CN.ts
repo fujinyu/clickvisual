@@ -512,6 +512,7 @@ export default {
 
   "log.empty": "暂未查询到日志",
   "log.pagination.total": "日志总条数: {total}",
+  "log.item.to": "定位",
   "log.item.copy": "复制",
   "log.item.copyRowLog": "复制项目日志",
   "log.item.copy.success": "复制成功",

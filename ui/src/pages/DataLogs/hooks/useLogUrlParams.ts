@@ -76,7 +76,7 @@ export default function useLogUrlParams() {
     tab: TimeRangeType.Relative,
     index: ACTIVE_TIME_INDEX,
     queryType: QueryTypeEnum.LOG,
-    by: "asc",
+    by: "desc",
   });
   const { timeOptions, handleChangeRelativeAmountAndUnit } = useTimeOptions();
 

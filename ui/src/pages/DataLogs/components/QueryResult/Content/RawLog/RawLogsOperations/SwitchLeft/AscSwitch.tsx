@@ -4,11 +4,11 @@ import { useModel } from "@umijs/max";
 import { Switch } from "antd";
 import { useIntl } from "umi";
 
-const HistogramSwitch = ({ oldPane }: { oldPane: PaneType | undefined }) => {
+const AscSwitch = ({ oldPane }: { oldPane: PaneType | undefined }) => {
   const { logPanesHelper, doGetLogs} = useModel("dataLogs");
   const { updateLogPane, logPanes } = logPanesHelper;
 
-  const handleChangeHistogramChecked = async () => {
+  const handleChangeAscChecked = async () => {
     if (!oldPane) return;
     if (!oldPane.ascChecked) {
        await doGetLogs({
@@ -31,16 +31,16 @@ const HistogramSwitch = ({ oldPane }: { oldPane: PaneType | undefined }) => {
     <>
       <Switch
         checked={oldPane?.ascChecked ?? true}
-        onChange={handleChangeHistogramChecked}
+        onChange={handleChangeAscChecked}
         size={"small"}
       />
       <span
         className={switchStyles.title}
-        onClick={handleChangeHistogramChecked}
+        onClick={handleChangeAscChecked}
       >
         {i18n.formatMessage({ id: "log.switch.asc" })}
       </span>
     </>
   );
 };
-export default HistogramSwitch;
+export default AscSwitch;

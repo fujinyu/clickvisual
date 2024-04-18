@@ -539,6 +539,7 @@ export default {
 
   "log.empty": "No Log Is Queried",
   "log.pagination.total": "Total number of logs: {total}",
+  "log.item.to": "Positioning",
   "log.item.copy": "Copy",
   "log.item.copyRowLog": "Copying the project log",
   "log.item.copy.success": "Copy success",

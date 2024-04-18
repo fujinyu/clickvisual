@@ -3,6 +3,7 @@ import { Space } from "antd";
 import CopyLog from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogList/LogItem/LogItemOperation/CopyLog";
 import MoreLog from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogList/LogItem/LogItemOperation/MoreLog";
 import CopyRawLog from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogList/LogItem/LogItemOperation/CopyRawLog";
+import ToLog from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogList/LogItem/LogItemOperation/ToLog";
 
 interface LogItemOperationProps {
   log: any;
@@ -14,6 +15,7 @@ const LogItemOperation = ({ log }: LogItemOperationProps) => {
         <CopyLog log={log} />
         <MoreLog log={log} />
         <CopyRawLog log={log} />
+          <ToLog log={log} />
       </Space>
     </div>
   );

@@ -349,6 +349,11 @@ const DataLogsModel = () => {
     setHighChartList(tabPane?.highCharts?.histograms ?? []);
     setLogCount(tabPane?.highCharts?.count || tabPane?.logs?.count || 0);
     onChangeOrderBy(tabPane?.by as string);
+    if(tabPane?.by=='asc')
+    {
+      tabPane.ascChecked =true;
+    }
+
     logPanesHelper.updateLogPane(tabPane.paneId, tabPane, panes);
     statisticalChartsHelper.setActiveQueryType(
       tabPane?.queryType ?? QueryTypeEnum.LOG
