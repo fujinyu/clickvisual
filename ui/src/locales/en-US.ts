@@ -479,6 +479,7 @@ export default {
 
   // log nva
   "log.switch.histogram": "Histogram",
+  "log.switch.asc": "Asc",
   "log.switch.unfold": "Collapse Log",
   "log.switch.folding": "Folding",
   "log.switch.link": "Link",

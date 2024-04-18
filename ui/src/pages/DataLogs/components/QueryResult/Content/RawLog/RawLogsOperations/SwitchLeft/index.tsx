@@ -2,6 +2,8 @@ import { Space } from "antd";
 import HistogramSwitch from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogsOperations/SwitchLeft/HistogramSiwtch";
 import FoldingExpansionSwitch from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogsOperations/SwitchLeft/FoldingExpansionSwitch";
 import HiddenFields from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogsOperations/SwitchLeft/HiddenFields";
+import AscSwitch from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogsOperations/SwitchLeft/AscSwitch";
+
 import { PaneType } from "@/models/datalogs/types";
 
 const SwitchLeft = (props: { oldPane: PaneType | undefined }) => {
@@ -9,7 +11,9 @@ const SwitchLeft = (props: { oldPane: PaneType | undefined }) => {
     <Space>
       <HistogramSwitch {...props} />
       <FoldingExpansionSwitch {...props} />
+        <AscSwitch {...props} />
       <HiddenFields {...props} />
+
     </Space>
   );
 };

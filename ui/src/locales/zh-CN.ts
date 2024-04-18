@@ -454,6 +454,7 @@ export default {
 
   // log nva
   "log.switch.histogram": "直方图",
+  "log.switch.asc": "顺排",
   "log.switch.unfold": "折叠日志",
   "log.switch.folding": "折叠",
   "log.switch.link": "链路",

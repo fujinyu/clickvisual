@@ -24,10 +24,11 @@ export const DefaultPane = {
   logs: undefined,
   histogramChecked: false,
   foldingChecked: false,
+  ascChecked: false,
   baseFieldsIndexList: undefined,
   logFieldsIndexList: undefined,
   logState: 0,
-  by: 'asc',
+  by: 'desc',
   relTraceTableId: 0,
   columsList: [],
 };

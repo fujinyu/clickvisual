@@ -515,18 +515,18 @@ const DataLogsModel = () => {
     };
   };
 
-  // const doGetLogs = (params?: QueryParams) => {
-  //   if (currentLogLibrary) {
-  //     cancelTokenLogsRef.current?.();
-  //     getLogs.run(
-  //       currentLogLibrary.id,
-  //       logsAndHighChartsPayload(params),
-  //       new CancelToken(function executor(c) {
-  //         cancelTokenLogsRef.current = c;
-  //       })
-  //     );
-  //   }
-  // };
+  const doGetLogs = (params?: QueryParams) => {
+    if (currentLogLibrary) {
+      cancelTokenLogsRef.current?.();
+      getLogs.run(
+        currentLogLibrary.id,
+        logsAndHighChartsPayload(params),
+        new CancelToken(function executor(c) {
+          cancelTokenLogsRef.current = c;
+        })
+      );
+    }
+  };
   const doGetHighCharts = async (params?: QueryParams) => {
     if (currentLogLibrary) {
       cancelTokenHighChartsRef.current?.();
@@ -852,7 +852,7 @@ const DataLogsModel = () => {
     analysisFieldTips,
     logQueryHistoricalList,
 
-    // doGetLogs,
+    doGetLogs,
     doGetHighCharts,
     doGetLogsAndHighCharts,
     // doGetLogLibraryList,
