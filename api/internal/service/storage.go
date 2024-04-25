@@ -112,7 +112,7 @@ func (s *srvStorage) stop() {
 func (s *srvStorage) CreateByILogtailTemplate(uid int, databaseInfo db2.BaseDatabase, param view.ReqCreateStorageByTemplateILogtail) (err error) {
 	cp := view.ReqStorageCreate{
 		CreateType:              constx.TableCreateTypeJSONAsString,
-		Typ:                     1,
+		Typ:                     2,
 		Days:                    param.Days,
 		Brokers:                 param.Brokers,
 		Consumers:               1,
