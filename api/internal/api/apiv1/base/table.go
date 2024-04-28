@@ -456,16 +456,16 @@ func QueryComplete(c *core.Context) {
 		c.JSONE(core.CodeErr, "invalid parameter", nil)
 		return
 	}
-	if err = permission.Manager.CheckNormalPermission(view.ReqPermission{
-		UserId:      c.Uid(),
-		ObjectType:  pmsplugin.PrefixInstance,
-		ObjectIdx:   strconv.Itoa(iid),
-		SubResource: pmsplugin.Log,
-		Acts:        []string{pmsplugin.ActView},
-	}); err != nil {
-		c.JSONE(1, "", err)
-		return
-	}
+	//if err = permission.Manager.CheckNormalPermission(view.ReqPermission{
+	//	UserId:      c.Uid(),·
+	//	ObjectType:  pmsplugin.PrefixInstance,
+	//	ObjectIdx:   strconv.Itoa(iid),
+	//	SubResource: pmsplugin.Log,
+	//	Acts:        []string{pmsplugin.ActView},
+	//}); err != nil {
+	//	c.JSONE(1, "", err)
+	//	return
+	//}
 	op, err := service.InstanceManager.Load(iid)
 	if err != nil {
 		c.JSONE(core.CodeErr, "", err)
