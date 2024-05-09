@@ -1875,9 +1875,9 @@ func (c *ClickHouseX) timeParseSQL(typ int, v *db.BaseView, timeField, rawLogFie
 	if v != nil && v.Format == "fromUnixTimestamp64Micro" && v.IsUseDefaultTime == 0 {
 		return fmt.Sprintf(nanosecondTimeParse, rawLogField, v.Key, rawLogField, v.Key)
 	}
-	if !strings.Contains(timeField, "JSONExtractString") {
-		timeField = "`" + timeField + "`"
-	}
+	//if !strings.Contains(timeField, "JSONExtractString") {
+	//	timeField = "`" + timeField + "`"
+	//}
 	if typ == factory.TableTypeString {
 		return fmt.Sprintf(defaultStringTimeParse, timeField, timeField)
 	}
