@@ -262,6 +262,9 @@ func CreateStorageByTemplate(c *core.Context) {
 	case "ilogtail":
 		createStorageByTemplateILogtail(c)
 		return
+	case "ilogtail_k8s":
+		createStorageByTemplateILogtailK8s(c)
+		return
 	case "agent":
 		createStorageByTemplateAgent(c)
 		return
@@ -371,6 +374,38 @@ func createStorageByTemplateILogtail(c *core.Context) {
 		return
 	}
 	if err = service.Storage.CreateByILogtailTemplate(c.Uid(), databaseInfo, param); err != nil {
+		c.JSONE(core.CodeErr, err.Error(), err)
+		return
+	}
+	event.Event.InquiryCMDB(c.User(), db.OpnTablesCreate, map[string]interface{}{"param": param})
+	c.JSONOK()
+}
+
+func createStorageByTemplateILogtailK8s(c *core.Context) {
+	var param view.ReqCreateStorageByTemplateILogtail
+	err := c.Bind(&param)
+	if err != nil {
+		c.JSONE(core.CodeErr, "invalid parameter: "+err.Error(), err)
+		return
+	}
+	databaseInfo, err := db.DatabaseInfo(invoker.Db, param.DatabaseId)
+	if err != nil {
+		c.JSONE(core.CodeErr, "invalid parameter: "+err.Error(), err)
+		return
+	}
+	if err = permission.Manager.CheckNormalPermission(view.ReqPermission{
+		UserId:      c.Uid(),
+		ObjectType:  pmsplugin.PrefixInstance,
+		ObjectIdx:   strconv.Itoa(databaseInfo.Iid),
+		SubResource: pmsplugin.Log,
+		Acts:        []string{pmsplugin.ActEdit},
+		DomainType:  pmsplugin.PrefixDatabase,
+		DomainId:    strconv.Itoa(databaseInfo.ID),
+	}); err != nil {
+		c.JSONE(1, "permission verification failed", err)
+		return
+	}
+	if err = service.Storage.CreateByILogtailK8sTemplate(c.Uid(), databaseInfo, param); err != nil {
 		c.JSONE(core.CodeErr, err.Error(), err)
 		return
 	}

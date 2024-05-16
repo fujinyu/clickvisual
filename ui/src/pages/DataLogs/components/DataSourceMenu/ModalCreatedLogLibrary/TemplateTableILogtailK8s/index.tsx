@@ -4,7 +4,7 @@ import {useIntl} from "umi";
 export interface TemplateTableType {
   //   formRef: any;
 }
-const TemplateTableILogtail = (props: TemplateTableType) => {
+const TemplateTableILogtailK8s = (props: TemplateTableType) => {
   const i18n = useIntl();
 
   return (
@@ -83,4 +83,4 @@ const TemplateTableILogtail = (props: TemplateTableType) => {
     </>
   );
 };
-export default TemplateTableILogtail;
+export default TemplateTableILogtailK8s;

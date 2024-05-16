@@ -10,6 +10,8 @@ import { useDebounceFn } from "ahooks";
 import { Form, FormInstance, message, Modal, Select } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { useIntl } from "umi";
+import TemplateTableILogtailK8s
+  from "@/pages/DataLogs/components/DataSourceMenu/ModalCreatedLogLibrary/TemplateTableILogtailK8s";
 
 const { Option } = Select;
 
@@ -77,6 +79,14 @@ const ModalCreatedLogLibrary = (props: { onGetList: any }) => {
             })
           : field.mode === 4
           ? doCreatedTableTemplate.run("ilogtail", {
+              brokers: field.brokers,
+              databaseId: addLogToDatabase?.id as number,
+              topic: field.topic,
+              days: field.days,
+              name: field.name,
+            })
+           : field.mode === 5
+           ? doCreatedTableTemplate.run("ilogtail_k8s", {
               brokers: field.brokers,
               databaseId: addLogToDatabase?.id as number,
               topic: field.topic,
@@ -225,6 +235,14 @@ const ModalCreatedLogLibrary = (props: { onGetList: any }) => {
                   { name: "iLogtail" }
                 )}
               </Option>
+              <Option value={5}>
+                {i18n.formatMessage(
+                    {
+                      id: "datasource.logLibrary.from.creationMode.option.template",
+                    },
+                    { name: "iLogtailK8s" }
+                )}
+              </Option>
               <Option value={3}>
                 {i18n.formatMessage(
                   {
@@ -258,6 +276,8 @@ const ModalCreatedLogLibrary = (props: { onGetList: any }) => {
                 return <TemplateTable />;
               case 4:
                 return <TemplateTableILogtail />;
+              case 5:
+                return <TemplateTableILogtailK8s />;
               case 21:
                 return <AgentTable />;
               default:

@@ -62,6 +62,7 @@ const NewTable = (props: {
             }),
           },
         ]}
+        initialValue={7}
       >
         <InputNumber
           placeholder={`${i18n.formatMessage({
@@ -84,6 +85,7 @@ const NewTable = (props: {
             }),
           },
         ]}
+        initialValue={"172.16.3.51:9094"}
       >
         <Input
           placeholder={`${i18n.formatMessage({
@@ -143,7 +145,7 @@ const NewTable = (props: {
       <Form.Item
         label={"kafkaSkipBrokenMessages"}
         name={"kafkaSkipBrokenMessages"}
-        initialValue={0}
+        initialValue={10}
       >
         <InputNumber min={0} style={{ width: "100%" }} />
       </Form.Item>

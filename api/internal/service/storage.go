@@ -136,6 +136,43 @@ func (s *srvStorage) CreateByILogtailTemplate(uid int, databaseInfo db2.BaseData
 	return
 }
 
+func (s *srvStorage) CreateByILogtailK8sTemplate(uid int, databaseInfo db2.BaseDatabase, param view.ReqCreateStorageByTemplateILogtail) (err error) {
+	cp := view.ReqStorageCreate{
+		CreateType:              constx.TableCreateTypeJSONAsString,
+		Typ:                     2,
+		Days:                    param.Days,
+		Brokers:                 param.Brokers,
+		Consumers:               1,
+		KafkaSkipBrokenMessages: 10,
+		Source: `{
+            "_source_":"stdout",
+            "_time_":"2024-05-16T03:00:03.754787739Z",
+            "container.image.name":"registry-vpc.cn-hangzhou.aliyuncs.com/vtradex/forest-cloud-model-app:1.0.32-SNAPSHOT.889",
+            "container.ip":"172.18.0.236",
+            "container.name":"forest-cloud-modelservice-test",
+            "content":"05-16 11:00:03.754 [INFO ] [日志跟踪号:0d6cb6b80a3b4457bba08d3086df13df_FEIGN - http-nio-8855-exec-10] [应用unikey: 模型编码: 组织编码: 登录名:] [com.vtradex.thorn.authorization.interceptor.AppPermissionInterceptor.pos...",
+            "host.ip":"172.16.128.155",
+            "host.name":"iZbp1ikikpygq9y1hq2kk0Z",
+            "k8s.namespace.name":"test-forest",
+            "k8s.node.ip":"172.16.128.155",
+            "k8s.node.name":"cn-hangzhou.172.16.128.155",
+            "k8s.pod.name":"forest-cloud-modelservice-test-5bf665b945-2p6ss",
+            "k8s.pod.uid":"533faee6-a627-48a5-bd4d-1b225c53b207",
+            "time":1715828404,
+            "time_ns":1715828404117983200
+        }`,
+		DatabaseId:  databaseInfo.ID,
+		TimeField:   "time",
+		RawLogField: "content",
+	}
+	cp.Topics = param.Topic
+	cp.TableName = param.Name
+	if err = s.createByILogtailTemplateItem(uid, databaseInfo, cp); err != nil {
+		return err
+	}
+	return
+}
+
 func (s *srvStorage) CreateByEgoTemplate(uid int, databaseInfo db2.BaseDatabase, param view.ReqCreateStorageByTemplateEgo) (err error) {
 	cp := view.ReqStorageCreate{
 		CreateType:              constx.TableCreateTypeJSONAsString,
@@ -143,7 +180,7 @@ func (s *srvStorage) CreateByEgoTemplate(uid int, databaseInfo db2.BaseDatabase,
 		Days:                    14,
 		Brokers:                 param.Brokers,
 		Consumers:               1,
-		KafkaSkipBrokenMessages: 1000,
+		KafkaSkipBrokenMessages: 10,
 		Source: `{
     "contents": {
         "_source_": "stderr",
