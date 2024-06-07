@@ -2058,16 +2058,21 @@ func (c *ClickHouseX) logsSQL(param view.ReqQuery, tid int) (sql, optSQL, origin
 	st := time.Now()
 	conds := egorm.Conds{}
 	conds["tid"] = tid
-	views, _ := db.ViewList(invoker.Db, conds)
+	//views, _ := db.ViewList(invoker.Db, conds)
 	c1 := time.Since(st).Milliseconds()
 	orderByField := param.TimeField
 	orderBy := param.BY
 	if orderBy == "" {
 		orderBy = "desc"
 	}
-	if len(views) > 0 {
+
+	//默认都使用纳秒排序
+	if true {
 		orderByField = db.TimeFieldNanoseconds
 	}
+	//if len(views) > 0 {
+	//	orderByField = db.TimeFieldNanoseconds
+	//}
 	selectFields := genSelectFields(tid)
 	c2 := time.Since(st).Milliseconds()
 
