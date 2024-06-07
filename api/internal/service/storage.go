@@ -115,14 +115,16 @@ func (s *srvStorage) CreateByILogtailTemplate(uid int, databaseInfo db2.BaseData
 		Typ:                     2,
 		Days:                    param.Days,
 		Brokers:                 param.Brokers,
-		Consumers:               1,
+		Consumers:               2,
 		KafkaSkipBrokenMessages: 10,
 		Source: `{
     		"content": "asaaaa",
     		"host.ip": "172.16.107.114",
     		"host.name": "izbp1cnvpgp38p9tq2cpxfz",
     		"log.file.path": "/home/fc/logs/lbs-sync/lbs-sync.log",
-    		"time": 1711895744
+    		"log_id":1799106821760626700,
+			"time":1717775465,
+			"time_ns":1717775465965161500
 		}`,
 		DatabaseId:  databaseInfo.ID,
 		TimeField:   "time",
@@ -142,7 +144,7 @@ func (s *srvStorage) CreateByILogtailK8sTemplate(uid int, databaseInfo db2.BaseD
 		Typ:                     2,
 		Days:                    param.Days,
 		Brokers:                 param.Brokers,
-		Consumers:               1,
+		Consumers:               2,
 		KafkaSkipBrokenMessages: 10,
 		Source: `{
             "_source_":"stdout",
@@ -158,6 +160,7 @@ func (s *srvStorage) CreateByILogtailK8sTemplate(uid int, databaseInfo db2.BaseD
             "k8s.node.name":"cn-hangzhou.172.16.128.155",
             "k8s.pod.name":"forest-cloud-modelservice-test-5bf665b945-2p6ss",
             "k8s.pod.uid":"533faee6-a627-48a5-bd4d-1b225c53b207",
+			"log_id":1799106821760626700,
             "time":1715828404,
             "time_ns":1715828404117983200
         }`,

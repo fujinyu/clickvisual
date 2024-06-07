@@ -1816,15 +1816,16 @@ func (c *ClickHouseX) whereConditionSQLDefaultV3(list []*db.BaseView) string {
 func (c *ClickHouseX) timeParseSQLV3(typ int, v *db.BaseView, timeField string) string {
 	rawLogField := constx.UBWKafkaStreamField
 	if timeField == "" {
-		timeField = "_time_"
+		timeField = "time"
 	}
+	timeNsField := "time_ns"
 	if v != nil && v.Format == "fromUnixTimestamp64Micro" && v.IsUseDefaultTime == 0 {
 		return fmt.Sprintf(nanosecondTimeParse, rawLogField, v.Key, rawLogField, v.Key)
 	}
 	if typ == factory.TableTypeString {
 		return fmt.Sprintf(defaultStringTimeParseV3, rawLogField, timeField, rawLogField, timeField)
 	}
-	return fmt.Sprintf(defaultFloatTimeParseV3, rawLogField, timeField, rawLogField, timeField)
+	return fmt.Sprintf(defaultFloatTimeParseV3, rawLogField, timeField, rawLogField, timeNsField)
 }
 
 func (c *ClickHouseX) whereConditionSQLCurrent(current *db.BaseView, rawLogField string) string {
@@ -1870,8 +1871,9 @@ func (c *ClickHouseX) timeParseJSONAsString(typ int, v *db.BaseView, timeField, 
 
 func (c *ClickHouseX) timeParseSQL(typ int, v *db.BaseView, timeField, rawLogField string) string {
 	if timeField == "" {
-		timeField = "_time_"
+		timeField = "time"
 	}
+	timeNsField := "time_ns"
 	if v != nil && v.Format == "fromUnixTimestamp64Micro" && v.IsUseDefaultTime == 0 {
 		return fmt.Sprintf(nanosecondTimeParse, rawLogField, v.Key, rawLogField, v.Key)
 	}
@@ -1881,7 +1883,7 @@ func (c *ClickHouseX) timeParseSQL(typ int, v *db.BaseView, timeField, rawLogFie
 	if typ == factory.TableTypeString {
 		return fmt.Sprintf(defaultStringTimeParse, timeField, timeField)
 	}
-	return fmt.Sprintf(defaultFloatTimeParse, timeField, timeField)
+	return fmt.Sprintf(defaultFloatTimeParse, timeField, timeNsField)
 }
 
 func (c *ClickHouseX) updateSwitcherJSONEachRow(typ, tid int, did int, table, customTimeField string, current *db.BaseView,
