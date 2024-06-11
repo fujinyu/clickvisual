@@ -5,7 +5,7 @@ import { Switch } from "antd";
 import { useIntl } from "umi";
 
 const AscSwitch = ({ oldPane }: { oldPane: PaneType | undefined }) => {
-  const { logPanesHelper, doGetLogs} = useModel("dataLogs");
+  const { logPanesHelper, doGetLogs,onChangeOrderBy} = useModel("dataLogs");
   const { updateLogPane, logPanes } = logPanesHelper;
 
   const handleChangeAscChecked = async () => {
@@ -14,10 +14,12 @@ const AscSwitch = ({ oldPane }: { oldPane: PaneType | undefined }) => {
        await doGetLogs({
            by: "asc"
        });
+        onChangeOrderBy("asc")
     } else {
         await doGetLogs({
             by: "desc"
         });
+        onChangeOrderBy("desc")
     }
     updateLogPane(
       oldPane.paneId,

@@ -523,6 +523,7 @@ const DataLogsModel = () => {
   const doGetLogs = (params?: QueryParams) => {
     if (currentLogLibrary) {
       cancelTokenLogsRef.current?.();
+      console.info("doGetLogs:"+JSON.stringify(params))
       getLogs.run(
         currentLogLibrary.id,
         logsAndHighChartsPayload(params),
@@ -831,6 +832,7 @@ const DataLogsModel = () => {
     logCount,
     startDateTime,
     endDateTime,
+    orderBy,
     pageSize,
     currentPage,
     logsLoading: getLogs.loading,
@@ -976,6 +978,7 @@ const DataLogsModel = () => {
 
     logExcelData,
     setLogExcelData,
+    onChangeOrderBy,
   };
 };
 export default DataLogsModel;

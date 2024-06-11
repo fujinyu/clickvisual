@@ -26,6 +26,7 @@ const RawLogQuery = () => {
     doGetLogsAndHighCharts,
     startDateTime,
     endDateTime,
+    orderBy,
     activeTimeOptionIndex,
     onChangeCurrentLogPane,
     logsLoading,
@@ -83,14 +84,17 @@ const RawLogQuery = () => {
         params.st = startDateTime;
         params.et = endDateTime;
       }
+      params.by=orderBy
       const pane: PaneType = {
         ...(oldPane as PaneType),
         start: params?.st ?? oldPane?.start,
         end: params?.et ?? oldPane?.end,
         keyword: queryKeyword,
+        by: params?.by ?? oldPane?.by,
         page: params.page,
         activeIndex: activeTimeOptionIndex,
       };
+      console.info("RawLogQuery:"+JSON.stringify(params))
       onChangeInitValue(queryKeyword ?? "");
       onChangeCurrentLogPane(pane);
       doGetLogsAndHighCharts(currentLogLibrary?.id, { reqParams: params }).then(
