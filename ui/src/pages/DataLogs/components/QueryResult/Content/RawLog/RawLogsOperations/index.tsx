@@ -27,9 +27,16 @@ const RawLogsOperations = ({ oldPane }: { oldPane: PaneType | undefined }) => {
     return logPanes[currentLogLibrary?.id || 0]?.logs?.cost;
   }, [logPanes]);
 
-  const isLink =
-    currentLogLibrary?.id &&
-    logPanes[currentLogLibrary.id.toString()].logState == 1;
+  var count = useMemo(() => {
+    return logPanes[currentLogLibrary?.id || 0]?.logs?.count;
+  }, [logPanes]);
+
+  if(count==0)
+  {
+    count=logCount;
+  }
+
+  const isLink =true
 
   return (
     <div className={rawLogsOperationsStyles.rawLogsOperationsMain}>
@@ -45,10 +52,10 @@ const RawLogsOperations = ({ oldPane }: { oldPane: PaneType | undefined }) => {
       <div className={rawLogsOperationsStyles.pagination}>
         <Pagination
           size={"small"}
-          total={logCount}
+          total={count}
           pageSize={pageSize}
           current={currentPage}
-          pageSizeOptions={isLink ? [50, 100, 200] : undefined}
+          pageSizeOptions={isLink ? [20, 50, 100, 200, 300] : undefined}
           showTotal={(total) => {
             return i18n.formatMessage(
               { id: "log.pagination.total" },
