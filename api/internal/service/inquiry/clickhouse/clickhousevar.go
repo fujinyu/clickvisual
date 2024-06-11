@@ -23,7 +23,7 @@ fromUnixTimestamp64Nano(toInt64(JSONExtractFloat(%s, '%s'))) AS _time_nanosecond
 // time_field 高精度数据解析选择
 var (
 	nanosecondTimeParse = `toDateTime(toInt64(JSONExtractFloat(%s, '%s'))) AS _time_second_, 
-  fromUnixTimestamp64Nano(toInt64(JSONExtractFloat(%s, '%s'))) AS _time_nanosecond_`
+  fromUnixTimestamp64Nano(toInt64(JSONExtractFloat(%s, '%s')*1000000000)) AS _time_nanosecond_`
 )
 
 var typArr = []string{
