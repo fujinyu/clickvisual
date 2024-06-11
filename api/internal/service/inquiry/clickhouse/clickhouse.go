@@ -1820,7 +1820,7 @@ func (c *ClickHouseX) timeParseSQLV3(typ int, v *db.BaseView, timeField string) 
 	}
 	timeNsField := "time_ns"
 	if v != nil && v.Format == "fromUnixTimestamp64Micro" && v.IsUseDefaultTime == 0 {
-		return fmt.Sprintf(nanosecondTimeParse, rawLogField, v.Key, rawLogField, v.Key)
+		return fmt.Sprintf(nanosecondTimeParse, rawLogField, v.Key, rawLogField, timeNsField)
 	}
 	if typ == factory.TableTypeString {
 		return fmt.Sprintf(defaultStringTimeParseV3, rawLogField, timeField, rawLogField, timeField)
