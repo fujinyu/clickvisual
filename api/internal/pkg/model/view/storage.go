@@ -151,6 +151,17 @@ func (r *ReqStorageCreate) IsRawLogFieldString() bool {
 	return false
 }
 
+// HasMappingField 判断采集映射是否包含指定字段（即流表/目标表是否有对应列），
+// 用于兼容未上报该字段的老采集（如 time_ns/log_id）。
+func (r *ReqStorageCreate) HasMappingField(key string) bool {
+	for _, v := range r.SourceMapping.Data {
+		if v.Key == key {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *ReqStorageCreate) Mapping2String(withType bool, rawLogFieldParent string) string {
 	var res string
 	if len(r.SourceMapping.Data) == 0 {

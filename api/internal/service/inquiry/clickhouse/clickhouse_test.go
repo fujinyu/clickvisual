@@ -1,9 +1,11 @@
 package clickhouse
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/clickvisual/clickvisual/api/internal/pkg/model/db"
+	"github.com/clickvisual/clickvisual/api/internal/service/inquiry/factory"
 )
 
 func Test_hashTransform(t *testing.T) {
@@ -324,5 +326,28 @@ func Test_clickhouseVersionCompare(t *testing.T) {
 				t.Errorf("clickhouseVersionCompare() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// 老采集未上报 time_ns 时的兼容性：float 时间模式必须带“秒×1e9”降级表达式，
+// 不能把 _time_nanosecond_ 直接落 0(1970)；string 时间模式不依赖 time_ns。
+func Test_timeParseJSONAsString_TimeNsFallback(t *testing.T) {
+	c := &ClickHouseX{}
+	got := c.timeParseJSONAsString(factory.TableTypeFloat, nil, "time", "", "_log")
+	want := "fromUnixTimestamp64Nano(toInt64(if(JSONExtractInt(_log, 'time_ns') > 0, JSONExtractInt(_log, 'time_ns'), toInt64(JSONExtractFloat(_log, 'time'))*1000000000))) AS _time_nanosecond_"
+	if !strings.Contains(got, want) {
+		t.Fatalf("timeParseJSONAsString() = %s, want contains %s", got, want)
+	}
+	gotStr := c.timeParseJSONAsString(factory.TableTypeString, nil, "ts", "", "_log")
+	if strings.Contains(gotStr, db.TimeNsField) {
+		t.Fatalf("string time mode should not reference time_ns, got %s", gotStr)
+	}
+}
+
+func Test_timeParseSQLV3_TimeNsFallback(t *testing.T) {
+	c := &ClickHouseX{}
+	got := c.timeParseSQLV3(factory.TableTypeFloat, nil, "time")
+	if !strings.Contains(got, "if(JSONExtractFloat(body, 'time_ns') > 0") || !strings.Contains(got, "*1000000000") {
+		t.Fatalf("timeParseSQLV3() missing time_ns fallback: %s", got)
 	}
 }

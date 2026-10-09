@@ -1827,14 +1827,16 @@ func (c *ClickHouseX) timeParseSQLV3(typ int, v *db.BaseView, timeField string) 
 	if timeField == "" {
 		timeField = "time"
 	}
-	timeNsField := db.TimeNsField
 	if v != nil && v.Format == "fromUnixTimestamp64Micro" && v.IsUseDefaultTime == 0 {
 		return fmt.Sprintf(nanosecondTimeParse, rawLogField, v.Key, rawLogField, v.Key)
 	}
 	if typ == factory.TableTypeString {
 		return fmt.Sprintf(defaultStringTimeParseV3, rawLogField, timeField, rawLogField, timeField)
 	}
-	return fmt.Sprintf(defaultFloatTimeParseV3, rawLogField, timeField, rawLogField, timeNsField)
+	// 采集报文无 time_ns 时降级为时间字段(秒)×1e9，避免 _time_nanosecond_ 落 1970
+	timeNsExpr := fmt.Sprintf("JSONExtractFloat(%s, '%s')", rawLogField, db.TimeNsField)
+	timeNsField := fmt.Sprintf("if(%s > 0, %s, JSONExtractFloat(%s, '%s')*1000000000)", timeNsExpr, timeNsExpr, rawLogField, timeField)
+	return fmt.Sprintf(defaultFloatTimeParseV3, rawLogField, timeField, timeNsField)
 }
 
 func (c *ClickHouseX) whereConditionSQLCurrent(current *db.BaseView, rawLogField string) string {
@@ -1868,12 +1870,17 @@ func (c *ClickHouseX) timeParseJSONAsString(typ int, v *db.BaseView, timeField, 
 	if timeFieldParent != "" {
 		l = fmt.Sprintf("JSONExtractRaw(_log, '%s')", timeFieldParent)
 	}
-	// time_ns 以 Int64 精确提取，避免 Float64 精度丢失导致 _time_nanosecond_ 错乱
+	if timeField == "" {
+		timeField = "time"
+	}
+	// time_ns 以 Int64 精确提取，避免 Float64 精度丢失导致 _time_nanosecond_ 错乱；
+	// 采集报文无 time_ns 时降级为时间字段(秒)×1e9，避免 _time_nanosecond_ 落 1970
 	timeNsField := fmt.Sprintf("JSONExtractInt(%s, '%s')", l, db.TimeNsField)
 	if v != nil && v.Format == "fromUnixTimestamp64Micro" && v.IsUseDefaultTime == 0 {
 		timeField = fmt.Sprintf("JSONExtractInt(%s, '%s')", l, timeField)
 	} else if typ == factory.TableTypeFloat {
 		timeField = fmt.Sprintf("JSONExtractFloat(%s, '%s')", l, timeField)
+		timeNsField = fmt.Sprintf("if(%s > 0, %s, toInt64(%s)*1000000000)", timeNsField, timeNsField, timeField)
 	} else {
 		timeField = fmt.Sprintf("JSONExtractString(%s, '%s')", l, timeField)
 	}
@@ -1942,15 +1949,27 @@ func (c *ClickHouseX) updateSwitcherJSONEachRow(typ, tid int, did int, table, cu
 	}
 	// create
 	var timeConv string
+	// 流表仅当映射含 time_ns 时才有该列；老采集未上报时降级为时间字段(秒)×1e9，
+	// 避免 MV 引用不存在的列而创建失败；映射含 time_ns 时也逐行降级，
+	// 兼容新老采集混跑过渡期（个别报文无 time_ns 时时间不落 1970）
+	tf := ct.TimeField
+	if tf == "" {
+		tf = "time"
+	}
+	secNs := fmt.Sprintf("toInt64(%s)*1000000000", tf)
+	timeNsField := secNs
+	if ct.HasMappingField(db.TimeNsField) {
+		timeNsField = fmt.Sprintf("if(%s > 0, %s, %s)", db.TimeNsField, db.TimeNsField, secNs)
+	}
 	var whereCond string
 	if customTimeField == "" {
-		timeConv = c.timeParseSQL(typ, nil, ct.TimeField, db.TimeNsField, ct.GetRawLogField())
+		timeConv = c.timeParseSQL(typ, nil, ct.TimeField, timeNsField, ct.GetRawLogField())
 		whereCond = c.whereConditionSQLDefault(list, ct.GetRawLogField())
 	} else {
 		if current == nil {
 			return "", errors.New("the process processes abnormal data errors, current view cannot be nil")
 		}
-		timeConv = c.timeParseSQL(typ, current, ct.TimeField, db.TimeNsField, ct.GetRawLogField())
+		timeConv = c.timeParseSQL(typ, current, ct.TimeField, timeNsField, ct.GetRawLogField())
 		whereCond = c.whereConditionSQLCurrent(current, ct.GetRawLogField())
 	}
 	rs := db.ReplicaStatusNo

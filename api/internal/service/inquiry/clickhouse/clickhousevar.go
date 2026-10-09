@@ -17,7 +17,7 @@ const (
 	defaultStringTimeParseV3 = `parseDateTimeBestEffort(JSONExtractString(%s, '%s')) AS _time_second_,
 toDateTime64(parseDateTimeBestEffort(JSONExtractString(%s, '%s')), 9, 'UTC') AS _time_nanosecond_`
 	defaultFloatTimeParseV3 = `toDateTime(toInt64(JSONExtractFloat(%s, '%s'))) AS _time_second_,
-fromUnixTimestamp64Nano(toInt64(JSONExtractFloat(%s, '%s'))) AS _time_nanosecond_`
+fromUnixTimestamp64Nano(toInt64(%s)) AS _time_nanosecond_`
 )
 
 // time_field 高精度数据解析选择
