@@ -51,9 +51,10 @@ const TagFieldContent = ({
 interface LogItemFoldProps {
   onFoldClick: () => void;
   log: any;
+  rawLogChecked?: boolean;
 }
 
-const LogItemFold = ({ onFoldClick, log }: LogItemFoldProps) => {
+const LogItemFold = ({ onFoldClick, log, rawLogChecked }: LogItemFoldProps) => {
   const { logs, doUpdatedQuery } = useModel("dataLogs");
 
   const {
@@ -124,6 +125,17 @@ const LogItemFold = ({ onFoldClick, log }: LogItemFoldProps) => {
 
       return { tagFields };
     }, [systemFields, indexList, secondaryIndexList, resultLog]);
+
+  // 仅原始日志开关打开时，折叠行只显示 _raw_log_ 原始报文
+  if (rawLogChecked) {
+    return (
+      <div className={logItemStyles.logItemHideMain} onClick={onFoldClick}>
+        <div className={logItemStyles.logItemHideIndex}>
+          <span>{`_raw_log_: ${log._raw_log_ ?? ""}`}</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={logItemStyles.logItemHideMain} onClick={onFoldClick}>

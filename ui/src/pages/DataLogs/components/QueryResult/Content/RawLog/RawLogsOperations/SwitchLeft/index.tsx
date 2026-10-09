@@ -3,6 +3,7 @@ import HistogramSwitch from "@/pages/DataLogs/components/QueryResult/Content/Raw
 import FoldingExpansionSwitch from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogsOperations/SwitchLeft/FoldingExpansionSwitch";
 import HiddenFields from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogsOperations/SwitchLeft/HiddenFields";
 import AscSwitch from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogsOperations/SwitchLeft/AscSwitch";
+import RawLogSwitch from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogsOperations/SwitchLeft/RawLogSwitch";
 
 import { PaneType } from "@/models/datalogs/types";
 
@@ -12,6 +13,7 @@ const SwitchLeft = (props: { oldPane: PaneType | undefined }) => {
       <HistogramSwitch {...props} />
       <FoldingExpansionSwitch {...props} />
         <AscSwitch {...props} />
+      <RawLogSwitch {...props} />
       <HiddenFields {...props} />
 
     </Space>

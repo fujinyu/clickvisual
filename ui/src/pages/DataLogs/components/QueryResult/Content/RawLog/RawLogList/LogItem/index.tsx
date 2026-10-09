@@ -10,8 +10,9 @@ import { Button } from "antd";
 interface LogItemProps {
   log: any;
   foldingChecked?: boolean;
+  rawLogChecked?: boolean;
 }
-const LogItem = ({ log, foldingChecked }: LogItemProps) => {
+const LogItem = ({ log, foldingChecked, rawLogChecked }: LogItemProps) => {
   // 是否折叠日志，true 为是，false 为否
   const [isFold, setIsFold] = useState<boolean>(true);
 
@@ -64,9 +65,17 @@ const LogItem = ({ log, foldingChecked }: LogItemProps) => {
       </div>
       <div className={logItemStyles.right}>
         {isFold ? (
-          <LogItemFold onFoldClick={handleFoldClick} log={log} />
+          <LogItemFold
+            onFoldClick={handleFoldClick}
+            log={log}
+            rawLogChecked={rawLogChecked}
+          />
         ) : (
-          <LogItemDetails foldingChecked={foldingChecked} log={log} />
+          <LogItemDetails
+            foldingChecked={foldingChecked}
+            log={log}
+            rawLogChecked={rawLogChecked}
+          />
         )}
       </div>
     </div>

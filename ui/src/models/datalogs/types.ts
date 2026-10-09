@@ -38,6 +38,7 @@ export type PaneType = {
   histogramChecked: boolean;
   foldingChecked: boolean;
   ascChecked: boolean
+  rawLogChecked: boolean
   mode?: number;
   baseFieldsIndexList?: IndexInfoType[];
   logFieldsIndexList?: IndexInfoType[];

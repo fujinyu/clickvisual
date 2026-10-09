@@ -10,9 +10,14 @@ import { useMemo } from "react";
 interface LogItemDetailsProps {
   log: any;
   foldingChecked?: boolean;
+  rawLogChecked?: boolean;
 }
 
-const LogItemDetails = ({ log, foldingChecked }: LogItemDetailsProps) => {
+const LogItemDetails = ({
+  log,
+  foldingChecked,
+  rawLogChecked,
+}: LogItemDetailsProps) => {
   const {
     logs,
     highlightKeywords,
@@ -32,6 +37,19 @@ const LogItemDetails = ({ log, foldingChecked }: LogItemDetailsProps) => {
     secondaryIndexList,
     indexNotRawLogKeys,
   } = useMemo(() => {
+    // 仅原始日志开关打开时不展开 rawLog JSON，只显示 _raw_log_ 字段本身
+    if (rawLogChecked) {
+      return {
+        keys: log["_raw_log_"] !== undefined ? ["_raw_log_"] : [],
+        newLog: log,
+        indexList: [],
+        rawLogJson: false,
+        rawLogKeys: [],
+        indexRawLogKeys: [],
+        secondaryIndexList: [],
+        indexNotRawLogKeys: [],
+      };
+    }
     // 隐藏字段
     const hiddenFields: string[] =
       logs?.hiddenFields?.filter((key, index) => {
@@ -129,7 +147,7 @@ const LogItemDetails = ({ log, foldingChecked }: LogItemDetailsProps) => {
       secondaryIndexList,
       indexNotRawLogKeys,
     };
-  }, [logs, logs?.keys, log]);
+  }, [logs, logs?.keys, log, rawLogChecked]);
 
   const quickInsertQuery = (keyItem: string) => {
     if (keyItem == "_headers.value" || keyItem == "_headers.name") {

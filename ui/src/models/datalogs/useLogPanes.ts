@@ -25,6 +25,7 @@ export const DefaultPane = {
   histogramChecked: false,
   foldingChecked: false,
   ascChecked: false,
+  rawLogChecked: false,
   baseFieldsIndexList: undefined,
   logFieldsIndexList: undefined,
   logState: 0,
