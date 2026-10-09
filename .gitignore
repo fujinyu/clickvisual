@@ -58,3 +58,4 @@ obsutil_linux_amd64*/
 .github
 .githooks
 go.sum
+*.zip
