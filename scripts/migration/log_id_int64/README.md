@@ -61,6 +61,10 @@
      由 `updateSwitcher` 用最新代码重建 MV（自动兼容父子字段、索引等所有情况）。
    - 备选路径 B（自包含）：用 `03_gen_rebuild_mv.sql` 生成的 DROP+CREATE 语句执行；
      该生成器只改写标准写法的 log_id/time_ns，怪异写法保持原样。
+   - 路径 C（单表、界面）：日志页右键日志库选“重建采集结构”，
+     后端 `POST /api/v1/tables/:id/rebuild` 自动按序完成上述三步
+     （修正 any_json → ALTER 目标表/流表列 → 经 updateSwitcher 重建全部 MV），
+     失败时回滚 any_json。适合逐表/小批量迁移；大批量仍建议路径 A/B。
 3. **更新元数据（MySQL any_json）**：把建表映射里 log_id/time_ns 的 `Float64` 改为 `Int64`，
    否则日后在 ClickVisual 里编辑该表索引会按旧类型重建 MV，精度又退化。
 

@@ -63,21 +63,9 @@ func (p *pms) GrantRoles2User(userId []int, roleId int) (err error) {
 
 	details := make([]view.RolePmsDetail, 0)
 	for _, detail := range roleInfo.Details {
-		subResourceArr1 := []string{}
-		err := jsoniter.UnmarshalFromString(detail.SubResources, &subResourceArr1)
-		if err != nil {
-			elog.Error("grant", elog.Any("err", err))
-		}
-
-		actArr1 := []string{}
-		err = jsoniter.UnmarshalFromString(detail.Acts, &actArr1)
-		if err != nil {
-			elog.Error("grant", elog.Any("err", err))
-		}
-
 		details = append(details, view.RolePmsDetail{
-			SubResources: subResourceArr1,
-			Acts:         actArr1,
+			SubResources: detail.SubResources,
+			Acts:         detail.Acts,
 		})
 	}
 

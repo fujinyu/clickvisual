@@ -13,6 +13,7 @@ import { DefaultPane } from "@/models/datalogs/useLogPanes";
 import logLibraryListStyles from "@/pages/DataLogs/components/DataSourceMenu/LogLibraryList/index.less";
 import useTimeOptions from "@/pages/DataLogs/hooks/useTimeOptions";
 import { IndexInfoType, TablesResponse } from "@/services/dataLogs";
+import api from "@/services/dataLogs";
 import { currentTimeStamp } from "@/utils/momentUtils";
 import {
   ApartmentOutlined,
@@ -22,9 +23,10 @@ import {
   FundProjectionScreenOutlined,
   FundViewOutlined,
   LinkOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import { useModel } from "@umijs/max";
-import { Dropdown, Tooltip } from "antd";
+import { Dropdown, message, Modal, Tooltip } from "antd";
 import classNames from "classnames";
 import lodash from "lodash";
 import moment from "moment";
@@ -207,6 +209,29 @@ const LogLibraryItem = (props: LogLibraryItemProps) => {
         },
         icon: <FundViewOutlined />,
         disabled: logLibrary.createType === 1,
+      },
+      {
+        label: i18n.formatMessage({ id: "datasource.tooltip.icon.rebuild" }),
+        key: "log-rebuild",
+        onClick: () => {
+          Modal.confirm({
+            title: i18n.formatMessage({ id: "datasource.tooltip.icon.rebuild" }),
+            content: i18n.formatMessage(
+              { id: "datasource.tooltip.icon.rebuild.confirm" },
+              { tableName: logLibrary.tableName }
+            ),
+            onOk: async () => {
+              const res = await api.rebuildTable(logLibrary.id);
+              if (res.code !== 0) {
+                message.error(res.msg);
+                return;
+              }
+              message.success(res.data);
+            },
+          });
+        },
+        icon: <ReloadOutlined />,
+        disabled: logLibrary.createType === 1 || logLibrary.v3TableType === 1,
       },
     ];
     if (logLibrary.v3TableType !== 1) {

@@ -21,6 +21,7 @@ import (
 	"github.com/clickvisual/clickvisual/api/internal/service"
 	"github.com/clickvisual/clickvisual/api/internal/service/event"
 	"github.com/clickvisual/clickvisual/api/internal/service/inquiry/clickhouse"
+	"github.com/clickvisual/clickvisual/api/internal/service/inquiry/factory"
 	"github.com/clickvisual/clickvisual/api/internal/service/permission"
 	"github.com/clickvisual/clickvisual/api/internal/service/permission/pmsplugin"
 )
@@ -939,6 +940,51 @@ func TableUpdate(c *core.Context) {
 	}
 	event.Event.AlarmCMDB(c.User(), db.OpnTablesUpdate, map[string]interface{}{"req": req})
 	c.JSONOK()
+}
+
+// TableRebuild
+// @Tags         LOGSTORE
+// @Summary 	 日志库采集链路重建（log_id/time_ns 修正为 Int64 并重建物化视图）
+func TableRebuild(c *core.Context) {
+	id := cast.ToInt(c.Param("id"))
+	if id == 0 {
+		c.JSONE(1, "invalid parameter", nil)
+		return
+	}
+	tableInfo, err := db.TableInfo(invoker.Db, id)
+	if err != nil {
+		c.JSONE(core.CodeErr, "rebuild failed: "+err.Error(), nil)
+		return
+	}
+	if err = permission.Manager.CheckNormalPermission(view.ReqPermission{
+		UserId:      c.Uid(),
+		ObjectType:  pmsplugin.PrefixInstance,
+		ObjectIdx:   strconv.Itoa(tableInfo.Database.Iid),
+		SubResource: pmsplugin.Log,
+		Acts:        []string{pmsplugin.ActEdit},
+		DomainType:  pmsplugin.PrefixTable,
+		DomainId:    strconv.Itoa(id),
+	}); err != nil {
+		c.JSONE(1, "permission verification failed", err)
+		return
+	}
+	op, err := service.InstanceManager.Load(tableInfo.Database.Iid)
+	if err != nil {
+		c.JSONE(core.CodeErr, "rebuild failed: "+err.Error(), nil)
+		return
+	}
+	rebuilder, ok := op.(factory.StorageRebuilder)
+	if !ok {
+		c.JSONE(core.CodeErr, "current datasource does not support storage rebuild", nil)
+		return
+	}
+	msg, err := rebuilder.RebuildStorageInt64(id)
+	if err != nil {
+		c.JSONE(core.CodeErr, "rebuild failed: "+err.Error(), nil)
+		return
+	}
+	event.Event.AlarmCMDB(c.User(), db.OpnTablesUpdate, map[string]interface{}{"tid": id, "rebuild": msg})
+	c.JSONOK(msg)
 }
 
 // TableDeps

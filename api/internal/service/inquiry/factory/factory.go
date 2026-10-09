@@ -65,6 +65,13 @@ type Operator interface {
 	CalculateInterval(interval int64, timeField string) (string, int64)
 }
 
+// StorageRebuilder 可选接口：支持“按正确整数类型重建采集结构”的数据源（当前为 ClickHouse）才实现。
+// 处理层通过类型断言判断当前数据源是否支持，不支持时给出提示。
+type StorageRebuilder interface {
+	// RebuildStorageInt64 将 log_id/time_ns 由 Float64 修正为 Int64（采集元数据+物理列），并重建全部物化视图；返回重建摘要。
+	RebuildStorageInt64(tid int) (string, error)
+}
+
 func TagsToString(alarm *db.Alarm, isMV bool, filterId int) string {
 	tags := alarm.Tags
 	if alarm.Tags == nil || len(alarm.Tags) == 0 {

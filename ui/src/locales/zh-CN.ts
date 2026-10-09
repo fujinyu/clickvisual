@@ -409,6 +409,8 @@ export default {
   "datasource.tooltip.icon.topology": "查看拓扑",
   "datasource.tooltip.icon.view": "配置时间字段",
   "datasource.tooltip.icon.link": "关联链路库",
+  "datasource.tooltip.icon.rebuild": "重建采集结构",
+  "datasource.tooltip.icon.rebuild.confirm": "将以正确的整数类型（log_id/time_ns 为 Int64）重建日志库 {tableName} 的采集链路：同步修正目标表/流表列类型并重建物化视图。重建期间该库实时写入会短暂中断，且历史数据精度无法恢复，是否继续？",
   "datasource.tooltip.icon.linkDependency": "查看 FDG",
   "datasource.tooltip.icon.deleted": "删除",
   "datasource.view.draw": "日志采集规则管理",

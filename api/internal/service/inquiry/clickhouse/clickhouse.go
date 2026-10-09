@@ -1827,7 +1827,7 @@ func (c *ClickHouseX) timeParseSQLV3(typ int, v *db.BaseView, timeField string) 
 	if timeField == "" {
 		timeField = "time"
 	}
-	timeNsField := "time_ns"
+	timeNsField := db.TimeNsField
 	if v != nil && v.Format == "fromUnixTimestamp64Micro" && v.IsUseDefaultTime == 0 {
 		return fmt.Sprintf(nanosecondTimeParse, rawLogField, v.Key, rawLogField, v.Key)
 	}
@@ -1869,7 +1869,7 @@ func (c *ClickHouseX) timeParseJSONAsString(typ int, v *db.BaseView, timeField, 
 		l = fmt.Sprintf("JSONExtractRaw(_log, '%s')", timeFieldParent)
 	}
 	// time_ns 以 Int64 精确提取，避免 Float64 精度丢失导致 _time_nanosecond_ 错乱
-	timeNsField := fmt.Sprintf("JSONExtractInt(%s, 'time_ns')", l)
+	timeNsField := fmt.Sprintf("JSONExtractInt(%s, '%s')", l, db.TimeNsField)
 	if v != nil && v.Format == "fromUnixTimestamp64Micro" && v.IsUseDefaultTime == 0 {
 		timeField = fmt.Sprintf("JSONExtractInt(%s, '%s')", l, timeField)
 	} else if typ == factory.TableTypeFloat {
@@ -1885,7 +1885,7 @@ func (c *ClickHouseX) timeParseSQL(typ int, v *db.BaseView, timeField, timeNsFie
 		timeField = "time"
 	}
 	if timeNsField == "" {
-		timeNsField = "time_ns"
+		timeNsField = db.TimeNsField
 	}
 	if v != nil && v.Format == "fromUnixTimestamp64Micro" && v.IsUseDefaultTime == 0 {
 		return fmt.Sprintf(nanosecondTimeParse, rawLogField, v.Key, rawLogField, v.Key)
@@ -1944,13 +1944,13 @@ func (c *ClickHouseX) updateSwitcherJSONEachRow(typ, tid int, did int, table, cu
 	var timeConv string
 	var whereCond string
 	if customTimeField == "" {
-		timeConv = c.timeParseSQL(typ, nil, ct.TimeField, "time_ns", ct.GetRawLogField())
+		timeConv = c.timeParseSQL(typ, nil, ct.TimeField, db.TimeNsField, ct.GetRawLogField())
 		whereCond = c.whereConditionSQLDefault(list, ct.GetRawLogField())
 	} else {
 		if current == nil {
 			return "", errors.New("the process processes abnormal data errors, current view cannot be nil")
 		}
-		timeConv = c.timeParseSQL(typ, current, ct.TimeField, "time_ns", ct.GetRawLogField())
+		timeConv = c.timeParseSQL(typ, current, ct.TimeField, db.TimeNsField, ct.GetRawLogField())
 		whereCond = c.whereConditionSQLCurrent(current, ct.GetRawLogField())
 	}
 	rs := db.ReplicaStatusNo
@@ -2073,6 +2073,147 @@ func (c *ClickHouseX) orderByClause(orderByField, orderBy string, tid int) strin
 		clause += fmt.Sprintf(", `%s` %s", db.LogIdField, orderBy)
 	}
 	return clause
+}
+
+// RebuildStorageInt64 按正确整数类型重建当前日志库的采集链路：
+// 将 log_id/time_ns 由 Float64 修正为 Int64（采集元数据 + 目标表/流表物理列），
+// 并沿既有 updateSwitcher 路径重建默认物化视图与各自定义时间字段物化视图。
+// 返回重建摘要；无需修正时不做任何写操作。
+func (c *ClickHouseX) RebuildStorageInt64(tid int) (msg string, err error) {
+	tableInfo, err := db.TableInfo(invoker.Db, tid)
+	if err != nil {
+		return "", err
+	}
+	switch tableInfo.CreateType {
+	case constx.TableCreateTypeCV, constx.TableCreateTypeJSONEachRow, constx.TableCreateTypeUBW, constx.TableCreateTypeJSONAsString:
+	default:
+		return "", errors.New("table not created by ClickVisual kafka pipeline, nothing to rebuild")
+	}
+	if tableInfo.AnyJSON == "" {
+		return "", errors.New("table collection metadata(any_json) is empty, cannot rebuild")
+	}
+	originalAnyJSON := tableInfo.AnyJSON
+	rsc := view.ReqStorageCreateUnmarshal(originalAnyJSON)
+	// step 1 修正采集元数据字段类型（Float64 无法精确存储 19 位大整数）
+	mappingFixed := 0
+	for i := range rsc.SourceMapping.Data {
+		item := &rsc.SourceMapping.Data[i]
+		if item.Key != db.LogIdField && item.Key != db.TimeNsField {
+			continue
+		}
+		switch item.Typ {
+		case "Float64":
+			item.Typ = "Int64"
+			mappingFixed++
+		case "Nullable(Float64)":
+			item.Typ = "Nullable(Int64)"
+			mappingFixed++
+		}
+	}
+	// step 2 修正目标表与 Kafka 流表的物理列类型
+	database := tableInfo.Database
+	isCluster, err := c.isCluster(database.Cluster)
+	if err != nil {
+		return "", err
+	}
+	candidates := []string{tableInfo.Name, tableInfo.Name + "_local", tableInfo.Name + "_stream", tableInfo.Name + "_local_stream"}
+	query := fmt.Sprintf("SELECT table, name, type FROM system.columns WHERE database = '%s' AND table IN ('%s') AND name IN ('%s', '%s') AND type IN ('Float64', 'Nullable(Float64)')",
+		database.Name, strings.Join(candidates, "','"), db.LogIdField, db.TimeNsField)
+	columns, err := c.doQueryWithRetry(query, false)
+	if err != nil {
+		return "", err
+	}
+	columnAlters := 0
+	for _, row := range columns {
+		tableName, _ := row["table"].(string)
+		colName, _ := row["name"].(string)
+		colType, _ := row["type"].(string)
+		newType := "Int64"
+		if strings.HasPrefix(colType, "Nullable(") {
+			newType = "Nullable(Int64)"
+		}
+		alterSQL := fmt.Sprintf("ALTER TABLE `%s`.`%s` MODIFY COLUMN `%s` %s;", database.Name, tableName, colName, newType)
+		if isCluster == ModeCluster {
+			alterSQL = fmt.Sprintf("ALTER TABLE `%s`.`%s` ON CLUSTER `%s` MODIFY COLUMN `%s` %s;", database.Name, tableName, database.Cluster, colName, newType)
+		}
+		if _, errExec := c.db.Exec(alterSQL); errExec != nil {
+			elog.Error("RebuildStorageInt64", elog.String("alterSQL", alterSQL), l.E(errExec))
+			return "", errExec
+		}
+		columnAlters++
+	}
+	if mappingFixed == 0 && columnAlters == 0 {
+		return "no Float64 log_id/time_ns found, nothing to rebuild", nil
+	}
+	// step 3 回写修正后的元数据（updateSwitcher 依据 any_json 重建物化视图）
+	if mappingFixed > 0 {
+		if err = db.TableUpdate(invoker.Db, tid, map[string]interface{}{"any_json": rsc.JSON()}); err != nil {
+			return "", err
+		}
+	}
+	// step 4 重建物化视图（默认视图 + 自定义时间字段视图），失败时回滚元数据
+	conds := egorm.Conds{}
+	conds["tid"] = tid
+	conds["kind"] = db.IndexKindLog
+	indexes, err := db.IndexList(conds)
+	if err != nil {
+		c.rollbackAnyJSON(tid, originalAnyJSON, mappingFixed)
+		return "", err
+	}
+	indexMap := make(map[string]*db.BaseIndex)
+	for _, idx := range indexes {
+		indexMap[idx.Field] = idx
+	}
+	condsViews := egorm.Conds{}
+	condsViews["tid"] = tid
+	viewList, err := db.ViewList(invoker.Db, condsViews)
+	if err != nil {
+		c.rollbackAnyJSON(tid, originalAnyJSON, mappingFixed)
+		return "", err
+	}
+	defaultViewSQL, err := c.updateSwitcher(tableInfo.TimeFieldKind, tid, tableInfo.Did, tableInfo.Name, "", nil, nil, indexMap, true)
+	if err != nil {
+		c.rollbackAnyJSON(tid, originalAnyJSON, mappingFixed)
+		return "", err
+	}
+	tx := invoker.Db.Begin()
+	ups := make(map[string]interface{}, 0)
+	ups["sql_view"] = defaultViewSQL
+	if err = db.TableUpdate(tx, tid, ups); err != nil {
+		tx.Rollback()
+		c.rollbackAnyJSON(tid, originalAnyJSON, mappingFixed)
+		return "", err
+	}
+	viewsRebuilt := 0
+	for _, current := range viewList {
+		innerViewSQL, errView := c.updateSwitcher(tableInfo.TimeFieldKind, tid, tableInfo.Did, tableInfo.Name, current.Key, current, viewList, indexMap, true)
+		if errView != nil {
+			tx.Rollback()
+			c.rollbackAnyJSON(tid, originalAnyJSON, mappingFixed)
+			return "", errView
+		}
+		if errView = db.ViewUpdate(tx, current.ID, map[string]interface{}{"sql_view": innerViewSQL}); errView != nil {
+			tx.Rollback()
+			c.rollbackAnyJSON(tid, originalAnyJSON, mappingFixed)
+			return "", errView
+		}
+		viewsRebuilt++
+	}
+	if err = tx.Commit().Error; err != nil {
+		c.rollbackAnyJSON(tid, originalAnyJSON, mappingFixed)
+		return "", err
+	}
+	return fmt.Sprintf("rebuild finished: mapping fields fixed=%d, columns altered=%d, views rebuilt=%d", mappingFixed, columnAlters, viewsRebuilt+1), nil
+}
+
+// rollbackAnyJSON 重建失败时恢复采集元数据，避免元数据与物理结构不一致。
+func (c *ClickHouseX) rollbackAnyJSON(tid int, original string, mappingFixed int) {
+	if mappingFixed == 0 {
+		return
+	}
+	if err := db.TableUpdate(invoker.Db, tid, map[string]interface{}{"any_json": original}); err != nil {
+		elog.Error("RebuildStorageInt64", elog.String("step", "rollbackAnyJSON"), l.E(err))
+	}
 }
 
 func (c *ClickHouseX) logsTimelineSQL(param view.ReqQuery, tid int) (sql string) {

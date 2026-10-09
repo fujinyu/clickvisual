@@ -465,6 +465,16 @@ export default {
     );
   },
 
+  // Rebuild the log library collection chain (fix log_id/time_ns to Int64 and rebuild materialized views)
+  async rebuildTable(id: number) {
+    return request<API.Res<string>>(
+      process.env.PUBLIC_PATH + `api/v1/tables/${id}/rebuild`,
+      {
+        method: "POST",
+      }
+    );
+  },
+
   async deletedManagementTable(id: number) {
     return request<API.Res<string>>(
       process.env.PUBLIC_PATH + `api/v1/log-library-management/tables/${id}`,

@@ -85,6 +85,7 @@ func v1(r *gin.RouterGroup) {
 	r.GET("/table/id", core.Handle(base.TableId))
 	r.GET("/tables/:id", core.Handle(base.TableInfo))
 	r.PATCH("/tables/:id", core.Handle(base.TableUpdate))
+	r.POST("/tables/:id/rebuild", core.Handle(base.TableRebuild))
 	r.GET("/tables/:id/logs", core.Handle(base.TableLogs))
 	r.DELETE("/tables/:id", core.Handle(base.TableDelete))
 	r.GET("/tables/:id/charts", core.Handle(base.TableCharts))

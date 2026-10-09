@@ -133,7 +133,7 @@ func (s *srvStorage) CreateByILogtailTemplate(uid int, databaseInfo db2.BaseData
 	}
 	cp.Topics = param.Topic
 	cp.TableName = param.Name
-	if err = s.createByILogtailTemplateItem(uid, databaseInfo, cp); err != nil {
+	if err = s.createByIlogtailTemplateItem(uid, databaseInfo, cp); err != nil {
 		return err
 	}
 	return

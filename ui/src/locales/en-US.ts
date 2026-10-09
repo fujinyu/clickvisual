@@ -422,6 +422,8 @@ export default {
   "datasource.tooltip.icon.topology": "View the corresponding topology",
   "datasource.tooltip.icon.view": "Configure data acquisition rules",
   "datasource.tooltip.icon.link": "Associate the link log library",
+  "datasource.tooltip.icon.rebuild": "Rebuild storage schema",
+  "datasource.tooltip.icon.rebuild.confirm": "Rebuild the collection chain of log library {tableName} with correct integer types (log_id/time_ns as Int64): column types of target/stream tables will be altered and materialized views recreated. Real-time ingestion will be briefly interrupted and historical precision cannot be restored. Continue?",
   "datasource.tooltip.icon.linkDependency": "View the FDG",
   "datasource.tooltip.icon.deleted": "Deleting a Log Library",
   "datasource.view.draw": "Manage Log Collection Rules",
