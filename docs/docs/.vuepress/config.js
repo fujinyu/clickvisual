@@ -42,7 +42,8 @@ var _hmt = _hmt || [];
         if(NODE_ENV === 'production'){
             return {
                 output: {
-                    publicPath: 'https://cdn.gocn.vip/clickvisual/'
+                    // 镜像站点自托管静态资源时覆盖该变量，例如 DOCS_PUBLIC_PATH=/
+                    publicPath: process.env.DOCS_PUBLIC_PATH || 'https://clickvisual.net/clickvisual/'
                 },
                 resolve: {
                     //配置路径别名
@@ -85,6 +86,19 @@ var _hmt = _hmt || [];
                         text: "GitHub",
                         link: "https://github.com/clickvisual/clickvisual",
                     },
+                    {
+                        text: "OfficeDex",
+                        items: [
+                            {
+                                text: "OfficeDex",
+                                link: "https://officedex.ai/",
+                            },
+                            {
+                                text: "ShimoDocs",
+                                link: "https://github.com/shimodocs/shimodocs",
+                            },
+                        ],
+                    },
                 ],
                 docsDir: "docs",
                 docsBranch: "master",
@@ -109,6 +123,19 @@ var _hmt = _hmt || [];
                         text: "GitHub",
                         link: "https://github.com/clickvisual/clickvisual",
                     },
+                    {
+                        text: "OfficeDex",
+                        items: [
+                            {
+                                text: "OfficeDex",
+                                link: "https://officedex.ai/",
+                            },
+                            {
+                                text: "ShimoDocs",
+                                link: "https://github.com/shimodocs/shimodocs",
+                            },
+                        ],
+                    },
                 ],
                 docsDir: "docs",
                 docsBranch: "master",
@@ -120,8 +147,8 @@ var _hmt = _hmt || [];
                             title: "快速开始",
                             collapsable: false, // 可选的, 默认值是 true,
                             children: [
-                                "01quickstart/changelogs",
                                 "/zh/clickvisual/",
+                                "01quickstart/changelogs",
                                 "01quickstart/roadmap",
                                 "01quickstart/experience-clickvisual-with-docker-compose",
                                 "01quickstart/qa",
@@ -137,6 +164,7 @@ var _hmt = _hmt || [];
                                 "02install/install-require",
                                 "02install/binary-installation",
                                 "02install/docker-installation",
+                                "02install/sqlite-private-lite",
                                 "02install/k8s-installation",
                             ],
                         },
@@ -224,6 +252,19 @@ var _hmt = _hmt || [];
                         text: "GitHub",
                         link: "https://github.com/clickvisual/clickvisual",
                     },
+                    {
+                        text: "OfficeDex",
+                        items: [
+                            {
+                                text: "OfficeDex",
+                                link: "https://officedex.ai/",
+                            },
+                            {
+                                text: "ShimoDocs",
+                                link: "https://github.com/shimodocs/shimodocs",
+                            },
+                        ],
+                    },
                 ],
                 docsDir: "docs",
                 docsBranch: "master",
@@ -259,6 +300,7 @@ var _hmt = _hmt || [];
                                 "02install/install-require",
                                 "02install/binary-installation",
                                 "02install/docker-installation",
+                                "02install/sqlite-private-lite",
                                 "02install/k8s-installation",
                             ],
                         },

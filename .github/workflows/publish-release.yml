@@ -1,0 +1,76 @@
+name: publish-release
+
+on:
+  push:
+    tags:
+      - "v**"
+    branches:
+      - 'fix/release'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build and publish, for example v1.1.1
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          fetch-depth: 0
+      - name: Verify release tag
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: git show-ref --verify --quiet "refs/tags/${RELEASE_TAG}"
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+      - name: Cache dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/yarn
+            ~/.npm
+          key: web-${{ runner.os }}-${{ hashFiles('ui/yarn.lock', 'ui-v2/package-lock.json') }}
+          restore-keys: web-${{ runner.os }}-
+      - name: Build v1 and v2 web assets
+        env:
+          NODE_OPTIONS: --max_old_space_size=8000
+        run: |
+          cd ui
+          yarn install --frozen-lockfile
+          yarn run build
+          rm -rf ../api/internal/ui/dist
+          cp -rf dist ../api/internal/ui
+          cd ../ui-v2
+          npm ci
+          npm run build
+          test -s ../api/internal/ui/dist/index.html
+          test -s ../api/internal/ui/v2dist/dist/index.html
+          test -n "$(find ../api/internal/ui/v2dist/dist/assets -type f -print -quit)"
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: 'v2.18.0'
+          args: release --clean --skip=validate
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

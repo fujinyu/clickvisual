@@ -37,13 +37,11 @@ OUT=${2:?"output path"}
 shift
 
 set -e
-GOOS=${GOOS:-linux}
-GOARCH=${GOARCH:-amd64}
 GOBINARY=${GOBINARY:-go}
 GOPKG="$GOPATH/pkg"
 BUILDINFO=${BUILDINFO:-""}
 STATIC=${STATIC:-1}
-LDFLAGS="-extldflags -static"
+LDFLAGS=""
 GOBUILDFLAGS=${GOBUILDFLAGS:-""}
 GCFLAGS=${GCFLAGS:-}
 
@@ -51,7 +49,6 @@ GCFLAGS=${GCFLAGS:-}
 IFS=' ' read -r -a GOBUILDFLAGS_ARRAY <<< "$GOBUILDFLAGS"
 
 GCFLAGS=${GCFLAGS:-}
-export CGO_ENABLED=0
 
 if [[ "${STATIC}" !=  "1" ]];then
     LDFLAGS=""

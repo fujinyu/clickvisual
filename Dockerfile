@@ -1,5 +1,5 @@
 # API build stage
-FROM golang:1.21.0-alpine3.17 as go-builder
+FROM golang:1.21.0-alpine3.17 AS go-builder
 ARG GOPROXY=goproxy.cn
 
 ENV GOPROXY=https://${GOPROXY},direct

@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -10,6 +9,7 @@ import (
 	"github.com/spf13/cast"
 
 	"github.com/clickvisual/clickvisual/api/internal/invoker"
+	"github.com/clickvisual/clickvisual/api/internal/pkg/agent/search"
 	"github.com/clickvisual/clickvisual/api/internal/pkg/component/core"
 	"github.com/clickvisual/clickvisual/api/internal/pkg/constx"
 	"github.com/clickvisual/clickvisual/api/internal/pkg/model/db"
@@ -77,7 +77,9 @@ func Create(c *core.Context) {
 		c.JSONE(1, "permission verification failed", err)
 		return
 	}
-	param.CreateType = constx.TableCreateTypeJSONEachRow
+	if param.CreateType == 0 {
+		param.CreateType = constx.TableCreateTypeJSONEachRow
+	}
 	_, err = service.StorageCreate(c.Uid(), databaseInfo, param)
 	if err != nil {
 		c.JSONE(core.CodeErr, err.Error(), err)
@@ -103,13 +105,20 @@ func AnalysisFields(c *core.Context) {
 		return
 	}
 	res := view.RespStorageAnalysisFields{
-		BaseFields: make([]view.StorageAnalysisField, 0),
-		LogFields:  make([]view.StorageAnalysisField, 0),
+		BaseFields:          make([]view.StorageAnalysisField, 0),
+		LogFields:           make([]view.StorageAnalysisField, 0),
+		SupportsGlobalMatch: true,
+	}
+	tableInfo, err := db.TableInfo(invoker.Db, storageId)
+	if err != nil {
+		c.JSONE(1, "load storage failed: "+err.Error(), nil)
+		return
 	}
 	// Read the index data
 	conds := egorm.Conds{}
 	conds["tid"] = storageId
 	fields, _ := db.IndexList(conds)
+	res.SupportsGlobalMatch = supportsGlobalMatchForTable(tableInfo, fields)
 	for _, row := range fields {
 		f := view.StorageAnalysisField{
 			Id:         row.ID,
@@ -121,7 +130,7 @@ func AnalysisFields(c *core.Context) {
 			Alias:      row.Alias,
 			Ctime:      row.Ctime,
 			Utime:      row.Utime,
-			OrderField: fmt.Sprintf("%s.%s", row.RootName, row.Field),
+			OrderField: row.GetFieldName(),
 		}
 		if row.Kind == 0 {
 			res.BaseFields = append(res.BaseFields, f)
@@ -137,6 +146,57 @@ func AnalysisFields(c *core.Context) {
 		return res.LogFields[i].OrderField < res.LogFields[j].OrderField
 	})
 	c.JSONOK(res)
+}
+
+func supportsGlobalMatchForTable(tableInfo db.BaseTable, fields []*db.BaseIndex) bool {
+	if tableInfo.CreateType != constx.TableCreateTypeExist {
+		return true
+	}
+	rawLogField := strings.TrimSpace(tableInfo.RawLogField)
+	if rawLogField != "" && (analysisFieldExists(fields, rawLogField) || physicalTableColumnExists(tableInfo, rawLogField)) {
+		return true
+	}
+	return analysisFieldExists(fields, "_raw_log_") || physicalTableColumnExists(tableInfo, "_raw_log_")
+}
+
+func analysisFieldExists(fields []*db.BaseIndex, field string) bool {
+	field = strings.TrimSpace(field)
+	if field == "" {
+		return false
+	}
+	for _, item := range fields {
+		if item == nil {
+			continue
+		}
+		if item.GetFieldName() == field || strings.TrimSpace(item.Field) == field {
+			return true
+		}
+	}
+	return false
+}
+
+func physicalTableColumnExists(tableInfo db.BaseTable, field string) bool {
+	field = strings.TrimSpace(field)
+	if field == "" || tableInfo.Database == nil || tableInfo.Database.Name == "" || tableInfo.Name == "" {
+		return false
+	}
+	op, err := service.InstanceManager.Load(tableInfo.Database.Iid)
+	if err != nil {
+		return false
+	}
+	columns, err := op.ListColumn(tableInfo.Database.Name, tableInfo.Name, false)
+	if err != nil {
+		return false
+	}
+	for _, item := range columns {
+		if item == nil {
+			continue
+		}
+		if strings.TrimSpace(item.Name) == field {
+			return true
+		}
+	}
+	return false
 }
 
 // Update  godoc
@@ -328,11 +388,13 @@ func createStorageByTemplateAgent(c *core.Context) {
 		c.JSONE(1, "permission verification failed", err)
 		return
 	}
+	tx := invoker.Db.Begin()
 	conds := egorm.Conds{}
 	conds["did"] = databaseInfo.ID
 	conds["name"] = param.Name
-	tableInfo, _ := db.TableInfoX(invoker.Db, conds)
+	tableInfo, _ := db.TableInfoX(tx, conds)
 	if tableInfo.ID != 0 {
+		tx.Rollback()
 		c.JSONE(1, "table is repeat", err)
 		return
 	}
@@ -340,9 +402,44 @@ func createStorageByTemplateAgent(c *core.Context) {
 		Did:  databaseInfo.ID,
 		Name: param.Name,
 	}
-	err = db.TableCreate(invoker.Db, &tableInfo)
+	err = db.TableCreate(tx, &tableInfo)
 	if err != nil {
+		tx.Rollback()
 		c.JSONE(1, "table created failed", err)
+		return
+	}
+	for _, col := range search.DefaultBaseFields {
+		err = db.IndexCreate(tx, &db.BaseIndex{
+			Tid:      tableInfo.ID,
+			Field:    col.Name,
+			Typ:      col.Type,
+			Alias:    "",
+			RootName: "",
+			Kind:     0,
+		})
+		if err != nil {
+			tx.Rollback()
+			c.JSONE(1, "index created failed", err)
+			return
+		}
+	}
+	for _, col := range search.DefaultLogFields {
+		err = db.IndexCreate(tx, &db.BaseIndex{
+			Tid:      tableInfo.ID,
+			Field:    col.Name,
+			Typ:      col.Type,
+			Alias:    "",
+			RootName: "",
+			Kind:     1,
+		})
+		if err != nil {
+			tx.Rollback()
+			c.JSONE(1, "index created failed", err)
+			return
+		}
+	}
+	if err = tx.Commit().Error; err != nil {
+		c.JSONE(core.CodeErr, "commit error", err)
 		return
 	}
 	event.Event.InquiryCMDB(c.User(), db.OpnTablesCreate, map[string]interface{}{"param": param})

@@ -481,16 +481,18 @@ func (c *ClickHouseX) CreateDatabase(name, cluster string) error {
 	if err != nil {
 		return errors.Wrap(err, "isCluster error")
 	}
+	var sql string
 	if isCluster == ModeCluster {
 		if cluster == "" {
 			return errors.New("cluster is required")
 		}
-		_, err = c.db.Exec(fmt.Sprintf("CREATE DATABASE `%s` ON CLUSTER '%s'", name, cluster))
+		sql = fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s` ON CLUSTER '%s'", name, cluster)
 	} else {
-		_, err = c.db.Exec(fmt.Sprintf("CREATE DATABASE `%s`", name))
+		sql = fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`", name)
 	}
+	_, err = c.db.Exec(sql)
 	if err != nil {
-		elog.Error("updateSwitcher", elog.Any("err", err.Error()), elog.String("step", "Exec"), elog.String("name", name))
+		elog.Error("CreateDatabase", l.E(err), l.A("step", "exec"), l.A("name", name), l.S("sql", sql))
 		return err
 	}
 	return nil
@@ -696,8 +698,12 @@ func (c *ClickHouseX) DeleteDatabase(name string, cluster string) (err error) {
 }
 
 func (c *ClickHouseX) DoSQL(sql string) (res view.RespComplete, err error) {
+	return c.DoSQLContext(context.Background(), sql)
+}
+
+func (c *ClickHouseX) DoSQLContext(ctx context.Context, sql string) (res view.RespComplete, err error) {
 	res.Logs = make([]map[string]interface{}, 0)
-	tmp, err := c.doQuery(sql, true)
+	tmp, err := c.doQueryWithRetryContext(ctx, sql, true)
 	if err != nil {
 		return
 	}
@@ -726,7 +732,7 @@ func (c *ClickHouseX) GetLogs(param view.ReqQuery, tid int) (res view.RespQuery,
 	if optimizeSQL != "" {
 		execSQL = optimizeSQL
 	}
-	res.Logs, err = c.doQuery(execSQL, false)
+	res.Logs, err = c.doQueryWithRetry(execSQL, false)
 	if err != nil {
 		return
 	}
@@ -740,7 +746,9 @@ func (c *ClickHouseX) GetLogs(param view.ReqQuery, tid int) (res view.RespQuery,
 					res.Logs[k][db.TimeFieldSecond] = res.Logs[k][param.TimeField].(int64) / 1000
 					res.Logs[k][db.TimeFieldNanoseconds] = res.Logs[k][param.TimeField].(int64)
 				}
-			} else if param.TimeFieldType == db.TimeFieldTypeDT3 {
+			} else if param.TimeFieldType == db.TimeFieldTypeDT3 ||
+				param.TimeFieldType == db.TimeFieldTypeDT6 ||
+				param.TimeFieldType == db.TimeFieldTypeDT9 {
 				res.Logs[k][db.TimeFieldNanoseconds] = res.Logs[k][param.TimeField]
 			} else {
 				res.Logs[k][db.TimeFieldSecond] = res.Logs[k][param.TimeField]
@@ -752,6 +760,7 @@ func (c *ClickHouseX) GetLogs(param view.ReqQuery, tid int) (res view.RespQuery,
 			}
 		}
 	}
+	factory.RemoveEmptyValues(res.Logs)
 	res.Limited = param.PageSize
 	// Read the index data
 	conds := egorm.Conds{}
@@ -785,7 +794,7 @@ func (c *ClickHouseX) GetLogs(param view.ReqQuery, tid int) (res view.RespQuery,
 
 func (c *ClickHouseX) Chart(param view.ReqQuery) (res []*view.HighChart, q string, err error) {
 	q = c.chartSQL(param)
-	charts, err := c.doQuery(q, false)
+	charts, err := c.doQueryWithRetry(q, false)
 	if err != nil {
 		elog.Error("Count", elog.Any("sql", q), elog.Any("error", err.Error()))
 		return nil, q, err
@@ -814,7 +823,7 @@ func (c *ClickHouseX) Chart(param view.ReqQuery) (res []*view.HighChart, q strin
 
 func (c *ClickHouseX) Count(param view.ReqQuery) (res uint64, err error) {
 	q := c.countSQL(param)
-	sqlCountData, err := c.doQuery(q, false)
+	sqlCountData, err := c.doQueryWithRetry(q, false)
 	if err != nil {
 		return 0, err
 	}
@@ -831,7 +840,7 @@ func (c *ClickHouseX) Count(param view.ReqQuery) (res uint64, err error) {
 
 func (c *ClickHouseX) GroupBy(param view.ReqQuery) (res map[string]uint64) {
 	res = make(map[string]uint64, 0)
-	sqlCountData, err := c.doQuery(c.groupBySQL(param), false)
+	sqlCountData, err := c.doQueryWithRetry(c.groupBySQL(param), false)
 	if err != nil {
 		elog.Error("ClickHouseX", elog.Any("sql", c.groupBySQL(param)), elog.FieldErr(err))
 		return
@@ -876,7 +885,7 @@ func (c *ClickHouseX) GroupBy(param view.ReqQuery) (res map[string]uint64) {
 func (c *ClickHouseX) databases() map[string][]*view.RespTablesSelfBuilt {
 	res := make(map[string][]*view.RespTablesSelfBuilt)
 	query := "select name from system.databases"
-	list, err := c.doQuery(query, false)
+	list, err := c.doQueryWithRetry(query, false)
 	if err != nil {
 		return res
 	}
@@ -892,7 +901,7 @@ func (c *ClickHouseX) ListDatabase() ([]*view.RespDatabaseSelfBuilt, error) {
 	dm := c.databases()
 	// 先从 system.databases 获取所有的数据库
 	query := "select database, name from system.tables"
-	list, err := c.doQuery(query, false)
+	list, err := c.doQueryWithRetry(query, false)
 	if err != nil {
 		return nil, err
 	}
@@ -924,7 +933,7 @@ func (c *ClickHouseX) ListColumn(database, table string, isTimeField bool) (res 
 	} else {
 		query = fmt.Sprintf("select name, type from system.columns where database = '%s' and table = '%s'", database, table)
 	}
-	list, err := c.doQuery(query, false)
+	list, err := c.doQueryWithRetry(query, false)
 	if err != nil {
 		return
 	}
@@ -1100,7 +1109,7 @@ func (c *ClickHouseX) ListSystemTable() (res []*view.SystemTables) {
 	// s := fmt.Sprintf("select * from system.tables where metadata_modification_time>toDateTime(%d)", time.Now().Add(-time.Minute*10).Unix())
 	// Get full data if it is reset isCluster
 	s := "select * from system.tables"
-	deps, err := c.doQuery(s, false)
+	deps, err := c.doQueryWithRetry(s, false)
 	if err != nil {
 		elog.Error("ListSystemTable", elog.Any("s", s), elog.Any("deps", deps), elog.Any("error", err))
 		return
@@ -1522,9 +1531,9 @@ func (c *ClickHouseX) ListSystemCluster() (l []*view.SystemClusters, m map[strin
 	l = make([]*view.SystemClusters, 0)
 	m = make(map[string]*view.SystemClusters, 0)
 	s := "select * from system.clusters"
-	clusters, err := c.doQuery(s, false)
+	clusters, err := c.doQueryWithRetry(s, false)
 	if err != nil {
-		return nil, nil, errors.WithMessage(err, "doQuery")
+		return nil, nil, errors.WithMessage(err, "doQueryWithRetry")
 	}
 	for _, cl := range clusters {
 		row := view.SystemClusters{
@@ -2161,9 +2170,37 @@ func (c *ClickHouseX) groupBySQL(param view.ReqQuery) (sql string) {
 	return
 }
 
+func (c *ClickHouseX) doQueryWithRetry(sql string, isShowNull bool) (res []map[string]interface{}, err error) {
+	return c.doQueryWithRetryContext(context.Background(), sql, isShowNull)
+}
+
+func (c *ClickHouseX) doQueryWithRetryContext(ctx context.Context, sql string, isShowNull bool) (res []map[string]interface{}, err error) {
+	res, err = c.doQueryContext(ctx, sql, isShowNull)
+	if err != nil {
+		elog.Error("doQueryFailed", elog.Any("step", "doQuery"), elog.Any("sql", sql), l.E(err))
+		// 重试十次
+		maxRetries := 10
+		for i := 0; i < maxRetries; i++ {
+			if ctx.Err() != nil {
+				return res, err
+			}
+			res, err = c.doQueryContext(ctx, sql, isShowNull)
+			if err == nil || !strings.Contains(err.Error(), "password is incorrect") {
+				return res, err
+			}
+			elog.Error("doQueryWithRetry", elog.Any("step", "retry"), elog.Any("attempt", i+1), elog.Any("sql", sql), l.E(err))
+		}
+	}
+	return res, err
+}
+
 func (c *ClickHouseX) doQuery(sql string, isShowNull bool) (res []map[string]interface{}, err error) {
+	return c.doQueryContext(context.Background(), sql, isShowNull)
+}
+
+func (c *ClickHouseX) doQueryContext(ctx context.Context, sql string, isShowNull bool) (res []map[string]interface{}, err error) {
 	res = make([]map[string]interface{}, 0)
-	rows, err := c.db.Query(sql)
+	rows, err := c.db.QueryContext(ctx, sql)
 	if err != nil {
 		return res, errors.Wrap(err, sql)
 	}
@@ -2207,7 +2244,7 @@ func (c *ClickHouseX) doQuery(sql string, isShowNull bool) (res []map[string]int
 func (c *ClickHouseX) timeFieldEqual(param view.ReqQuery, tid int) string {
 	var res string
 	s := c.logsTimelineSQL(param, tid)
-	out, err := c.doQuery(s, false)
+	out, err := c.doQueryWithRetry(s, false)
 	if err != nil {
 		elog.Error("timeFieldEqual", elog.Any("step", "logsSQL"), elog.Any("sql", s), elog.String("error", err.Error()))
 		return res

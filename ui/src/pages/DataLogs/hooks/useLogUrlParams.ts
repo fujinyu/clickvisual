@@ -24,6 +24,7 @@ import dayjs from "dayjs";
 import { isEqual } from "lodash";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TimeOption } from "../components/DateTimeSelected";
+import { resolveInitialTableId, resolveSharedTableId } from "./shareTable";
 import useTimeOptions from "./useTimeOptions";
 
 export interface UrlStateType {
@@ -33,6 +34,7 @@ export interface UrlStateType {
   database?: string | number;
   datasource?: string;
   table?: string;
+  tablename?: string;
   start?: string | number;
   end?: string | number;
   kw?: string;
@@ -325,7 +327,7 @@ export default function useLogUrlParams() {
 
   useEffect(() => {
     const lastDataLogsState = getLastDataLogsState();
-    setTid(urlState.tid || lastDataLogsState.tid);
+    setTid(resolveInitialTableId(isShare, urlState.tid, lastDataLogsState.tid));
   }, []);
 
   useEffect(() => {
@@ -341,6 +343,12 @@ export default function useLogUrlParams() {
         });
 
         currentTable.length == 1 && doSetUrlQuery(parseInt(tid));
+        onChangeIsTidInitialize(true);
+      }
+    } else if (isShare && urlState.tablename && allTables.length > 0) {
+      const sharedTableId = resolveSharedTableId(urlState.tablename, allTables);
+      if (sharedTableId) {
+        doSetUrlQuery(sharedTableId);
         onChangeIsTidInitialize(true);
       }
     } else if (

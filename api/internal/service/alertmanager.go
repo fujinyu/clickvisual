@@ -2,13 +2,15 @@ package service
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/ego-component/egorm"
+	"github.com/gotomicro/cetus/l"
 	"github.com/gotomicro/ego/core/elog"
+	"github.com/pkg/errors"
 
 	"github.com/clickvisual/clickvisual/api/internal/invoker"
 	"github.com/clickvisual/clickvisual/api/internal/pkg/model/db"
@@ -17,67 +19,72 @@ import (
 	"github.com/clickvisual/clickvisual/api/internal/service/inquiry/factory"
 )
 
+// HandlerAlertManager Processing Alarms
 func (i *alert) HandlerAlertManager(alarmUUID string, filterIdStr string, notification db.Notification) (err error) {
+	log := elog.With(l.A("alarmUUID", alarmUUID), l.A("filterIdStr", filterIdStr), l.A("notification", notification), elog.FieldMethod("HandlerAlertManager"))
 	alarmUUID = strings.ReplaceAll(alarmUUID, "\u0000", "")
 	filterIdStr = strings.ReplaceAll(filterIdStr, "\u0000", "")
-	// 获取告警信息
+	// Getting Alarm Information
 	tx := invoker.Db.Begin()
 	conds := egorm.Conds{}
 	conds["uuid"] = alarmUUID
 	alarm, err := db.AlarmInfoX(tx, conds)
 	if err != nil {
 		tx.Rollback()
-		return err
+		return fmt.Errorf("AlarmInfoX %s, error: %w", alarmUUID, err)
 	}
 	if alarm.Status == db.AlarmStatusClose {
+		log.Warn("AlarmStatusClose")
 		tx.Commit()
 		return
 	}
-	notifStatus := notification.GetStatus() // 当前需要推送的状态
-	if alarm.IsDisableResolve == 1 && notifStatus == db.AlarmStatusNormal {
+	notificationStatus := notification.GetStatus() // 当前需要推送的状态
+	if alarm.IsDisableResolve == 1 && notificationStatus == db.AlarmStatusNormal {
+		log.Warn("AlarmIsDisableResolve", l.A("alarm", alarm))
 		tx.Commit()
 		return
 	}
 	// create history
-	filterId, _ := strconv.Atoi(filterIdStr)
-	alarmHistory := db.AlarmHistory{AlarmId: alarm.ID, FilterId: filterId, FilterStatus: notifStatus, IsPushed: db.PushedStatusRepeat}
+	filterId, err := strconv.Atoi(filterIdStr)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("strconv.Atoi %s, error: %w", filterIdStr, err)
+	}
+	alarmHistory := db.AlarmHistory{AlarmId: alarm.ID, FilterId: filterId, FilterStatus: notificationStatus, IsPushed: db.PushedStatusRepeat}
 	if err = db.AlarmHistoryCreate(tx, &alarmHistory); err != nil {
 		tx.Rollback()
-		return err
+		return fmt.Errorf("AlarmHistoryCreate %s, error: %w", alarmUUID, err)
 	}
 	currentFiltersStatus := alarm.GetStatus(tx)
 	// update filter
 	af := db.AlarmFilter{}
 	af.ID = filterId
-	af.Status = notifStatus
+	af.Status = notificationStatus
 	if err = af.UpdateStatus(tx); err != nil {
 		tx.Rollback()
-		return
+		return fmt.Errorf("alarm filter UpdateStatus %s, error: %w", alarmUUID, err)
 	}
 	if err = alarm.UpdateStatus(tx, alarm.GetStatus(tx)); err != nil {
-		elog.Error("PushAlertManagerError", elog.FieldErr(err), elog.Int("filterId", filterId), elog.String("alarmUUID", alarmUUID))
 		tx.Rollback()
-		return err
+		return fmt.Errorf("alarm UpdateStatus %s, error: %w", alarmUUID, err)
 	}
-	if currentFiltersStatus == notifStatus && time.Now().Unix()-alarm.Utime < 300 {
+	if currentFiltersStatus == notificationStatus && time.Now().Unix()-alarm.Utime < 300 {
 		// 此时有正在进行中的告警
-		elog.Info("PushAlertManagerRepeat", elog.Int("notifStatus", notifStatus), elog.Int("filterId", filterId), elog.String("alarmUUID", alarmUUID))
+		log.Info("PushAlertManagerRepeat", l.I("filterId", filterId))
 		tx.Commit()
-		return nil
+		return
 	}
 	// 完成告警状态更新
 	tx.Commit()
 	// get alarm filter info
 	filter, err := i.compatibleFilter(alarm.ID, filterId)
 	if err != nil {
-		elog.Error("PushAlertManagerError", elog.FieldErr(err), elog.Int("filterId", filterId), elog.String("alarmUUID", alarmUUID))
-		return
+		return fmt.Errorf("compatibleFilter %s, error: %w", alarmUUID, err)
 	}
 	// get table info
 	tableInfo, err := db.TableInfo(invoker.Db, filter.Tid)
 	if err != nil {
-		elog.Error("PushAlertManagerError", elog.FieldErr(err), elog.Int("filterId", filterId), elog.String("alarmUUID", alarmUUID))
-		return
+		return fmt.Errorf("TableInfo %s, error: %w", alarmUUID, err)
 	}
 	if tableInfo.TimeField == "" {
 		tableInfo.TimeField = db.TimeFieldSecond
@@ -85,31 +92,28 @@ func (i *alert) HandlerAlertManager(alarmUUID string, filterIdStr string, notifi
 	// get op
 	op, err := InstanceManager.Load(tableInfo.Database.Iid)
 	if err != nil {
-		elog.Error("PushAlertManagerError", elog.FieldErr(err), elog.Int("filterId", filterId), elog.String("alarmUUID", alarmUUID))
-		return
+		return fmt.Errorf("InstanceManager.Load %s, error: %w", alarmUUID, err)
 	}
 	// get partial log
 	partialLog := i.getPartialLog(op, &tableInfo, &alarm, filter)
 
 	pushMsg, err := pusher.BuildAlarmMsg(notification, &tableInfo, &alarm, filter, partialLog)
 	if err != nil {
-		elog.Error("PushAlertManagerError", elog.FieldErr(err), elog.Int("filterId", filterId), elog.String("alarmUUID", alarmUUID))
-		return
+		return fmt.Errorf("BuildAlarmMsg %s, error: %w", alarmUUID, err)
 	}
 
 	pushMsgWithAt, err := pusher.BuildAlarmMsgWithAt(notification, &tableInfo, &alarm, filter, partialLog)
 	if err != nil {
-		elog.Error("PushAlertManagerError", elog.FieldErr(err), elog.Int("filterId", filterId), elog.String("alarmUUID", alarmUUID))
-		return
+		return fmt.Errorf("BuildAlarmMsgWithAt %s, error: %w", alarmUUID, err)
 	}
 
 	if err = pusher.Execute(alarm.ChannelIds, pushMsg, pushMsgWithAt); err != nil {
-		elog.Error("PushAlertManagerError", elog.FieldErr(err), elog.Int("filterId", filterId), elog.String("alarmUUID", alarmUUID))
 		_ = db.AlarmHistoryUpdate(invoker.Db, alarmHistory.ID, map[string]interface{}{"is_pushed": db.PushedStatusFail})
-		return
+		return fmt.Errorf("execute %s, error: %w", alarmUUID, err)
 	}
+
 	if err = db.AlarmHistoryUpdate(invoker.Db, alarmHistory.ID, map[string]interface{}{"is_pushed": db.PushedStatusSuccess}); err != nil {
-		return err
+		return fmt.Errorf("AlarmHistoryUpdate %s, error: %w", alarmUUID, err)
 	}
 	return nil
 }
@@ -120,7 +124,7 @@ func (i *alert) compatibleFilter(alarmId int, filterId int) (res *db.AlarmFilter
 		condsFilter["alarm_id"] = alarmId
 		filters, errAlarmFilterList := db.AlarmFilterList(invoker.Db, condsFilter)
 		if errAlarmFilterList != nil {
-			return nil, errAlarmFilterList
+			return nil, errors.WithMessagef(errAlarmFilterList, "AlarmFilterList %d", alarmId)
 		}
 		if len(filters) == 0 {
 			return nil, errors.New("empty alarm filter")
@@ -129,7 +133,7 @@ func (i *alert) compatibleFilter(alarmId int, filterId int) (res *db.AlarmFilter
 	} else {
 		filter, errAlarmFilterInfo := db.AlarmFilterInfo(invoker.Db, filterId)
 		if errAlarmFilterInfo != nil {
-			return nil, errAlarmFilterInfo
+			return nil, errors.WithMessagef(errAlarmFilterInfo, "AlarmFilterInfo %d", filterId)
 		}
 		res = &filter
 	}

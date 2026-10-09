@@ -34,6 +34,23 @@ dir = "./logs"
 name = "default.log"
 ```
 
+report segment configuration description:
+```toml
+[report.summary.ai]
+enabled = false
+baseURL = "https://api.openai.com"
+apiKey = ""
+model = ""
+timeout = 5
+maxRows = 5
+
+[report.aggregation]
+# Extend the default pre-aggregation whitelist
+allowedFields = ["_namespace_"]
+# Extend the default TopN group-by whitelist
+allowedGroupByFields = ["_namespace_"]
+```
+
 server segment configuration description
 ```toml
 # ClickVisual API Server Config
@@ -67,6 +84,31 @@ maxIdleConns = 5
 # Maximum open connections
 maxOpenConns = 50
 ```
+
+metadata segment configuration description
+```toml
+[metadata]
+# Metadata database driver. Available values: mysql or sqlite. Defaults to [mysql] when omitted.
+driver = "mysql"
+# Metadata database DSN. When driver = "sqlite", set this to a SQLite file path.
+dsn = ""
+# Print metadata SQL debug logs.
+debug = true
+```
+
+SQLite metadata example:
+
+```toml
+[metadata]
+driver = "sqlite"
+dsn = "data/clickvisual-private-lite.db"
+debug = true
+
+[mysql]
+dsn = ""
+```
+
+The service automatically initializes the SQLite metadata schema during startup. You do not need to create SQLite tables manually. SQLite only stores ClickVisual management data; log data is still stored in ClickHouse.
 
 auth segment configuration description
 ```toml

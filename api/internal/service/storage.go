@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/ego-component/egorm"
@@ -170,17 +171,30 @@ func (s *srvStorage) CreateByILogtailK8sTemplate(uid int, databaseInfo db2.BaseD
 	}
 	cp.Topics = param.Topic
 	cp.TableName = param.Name
-	if err = s.createByILogtailTemplateItem(uid, databaseInfo, cp); err != nil {
+	if err = s.createByIlogtailTemplateItem(uid, databaseInfo, cp); err != nil {
 		return err
 	}
 	return
 }
 
 func (s *srvStorage) CreateByEgoTemplate(uid int, databaseInfo db2.BaseDatabase, param view.ReqCreateStorageByTemplateEgo) (err error) {
+	err = s.createByEgoAppStdout(uid, databaseInfo, param)
+	if err != nil {
+		return fmt.Errorf("create by ego app stdout error: %w", err)
+	}
+	time.Sleep(1 * time.Second)
+	err = s.createByEgoIngressStdout(uid, databaseInfo, param)
+	if err != nil {
+		return fmt.Errorf("create by ego ingress stdout error: %w", err)
+	}
+	return
+}
+
+func (s *srvStorage) createByEgoAppStdout(uid int, databaseInfo db2.BaseDatabase, param view.ReqCreateStorageByTemplateEgo) (err error) {
 	cp := view.ReqStorageCreate{
 		CreateType:              constx.TableCreateTypeJSONAsString,
 		Typ:                     1,
-		Days:                    14,
+		Days:                    3,
 		Brokers:                 param.Brokers,
 		Consumers:               1,
 		KafkaSkipBrokenMessages: 10,
@@ -216,26 +230,22 @@ func (s *srvStorage) CreateByEgoTemplate(uid int, databaseInfo db2.BaseDatabase,
 	if err = s.createByEgoTemplateItem(uid, databaseInfo, cp); err != nil {
 		return err
 	}
+	return nil
+}
 
-	cp.Topics = param.TopicsEgo
-	cp.TableName = "ego_stdout"
-	if err = s.createByEgoTemplateItem(uid, databaseInfo, cp); err != nil {
-		return err
-	}
-
-	cp.Topics = param.TopicsIngressStdout
-	cp.TableName = "ingress_stdout"
-	if err = s.createByEgoTemplateItem(uid, databaseInfo, cp); err != nil {
-		return err
-	}
-
-	cp.Topics = param.TopicsIngressStderr
-	cp.TableName = "ingress_stderr"
-	cp.Source = `{
+func (s *srvStorage) createByEgoIngressStdout(uid int, databaseInfo db2.BaseDatabase, param view.ReqCreateStorageByTemplateEgo) (err error) {
+	cp := view.ReqStorageCreate{
+		CreateType:              constx.TableCreateTypeJSONAsString,
+		Typ:                     1,
+		Days:                    3,
+		Brokers:                 param.Brokers,
+		Consumers:               1,
+		KafkaSkipBrokenMessages: 1000,
+		Source: `{
     "contents": {
         "_source_": "stderr",
         "_time_": "2023-04-17T04:07:17.624075074Z",
-        "content": "abc123...asfa"
+        "content": "{\"lv\":\"debug\",\"ts\":1681704437,\"msg\":\"presigned get object URL\"}"
     },
     "tags": {  
         "container.image.name": "xxx",
@@ -251,14 +261,22 @@ func (s *srvStorage) CreateByEgoTemplate(uid int, databaseInfo db2.BaseDatabase,
         "k8s.pod.uid": "xx-xx-xx-xx-xx"
     },
     "time": 1681704438
-}`
+}`,
+		DatabaseId:        databaseInfo.ID,
+		TimeField:         "_time_",
+		TimeFieldParent:   "contents",
+		RawLogField:       "content",
+		RawLogFieldParent: "contents",
+	}
+	cp.Topics = param.TopicsIngressStdout
+	cp.TableName = "ingress_stdout"
 	if err = s.createByEgoTemplateItem(uid, databaseInfo, cp); err != nil {
 		return err
 	}
-	return
+	return nil
 }
 
-func (s *srvStorage) createByILogtailTemplateItem(uid int, databaseInfo db2.BaseDatabase, param view.ReqStorageCreate) (err error) {
+func (s *srvStorage) createByIlogtailTemplateItem(uid int, databaseInfo db2.BaseDatabase, param view.ReqStorageCreate) (err error) {
 	// Detection is whether it has been created
 	conds := egorm.Conds{}
 	conds["did"] = databaseInfo.ID
@@ -281,11 +299,15 @@ func (s *srvStorage) createByEgoTemplateItem(uid int, databaseInfo db2.BaseDatab
 	conds["name"] = param.TableName
 	tableInfo, _ := db2.TableInfoX(invoker.Db, conds)
 	if tableInfo.ID != 0 {
-		return nil
+		// delete table
+		err = db2.TableDelete(invoker.Db, tableInfo.ID)
+		if err != nil {
+			return fmt.Errorf("delete table error: %w", err)
+		}
 	}
 	table, err := StorageCreate(uid, databaseInfo, param)
 	if err != nil {
-		return
+		return fmt.Errorf("create table error: %w", err)
 	}
 	err = AnalysisFieldsUpdate(table.ID, templateTableAnalysisField[table.Name])
 	if err != nil {

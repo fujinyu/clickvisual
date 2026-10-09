@@ -10,23 +10,23 @@
 
 [English](https://github.com/clickvisual/clickvisual/blob/master/README.md) | [中文](https://github.com/clickvisual/clickvisual/blob/master/README-CN.md)
 
-ClickVisual is a lightweight browser-based logs analytics and logs search platform for ClickHouse.
+ClickVisual is a lightweight browser-based logs analytics and logs search platform for ClickHouse, we are from [@ShimoDocs](https://github.com/shimodocs/shimodocs)
 
 ### Documentation
 
 See <https://clickvisual.net>
 
 ### Log Query Demonstration
-![log-search](https://cdn.gocn.vip/clickvisual/assets/img/logs.b24e990e.gif)
+![log-search](https://clickvisual.net/clickvisual/assets/img/logs.b24e990e.gif)
 
 ### Alarm Process Demonstration
-![log-search](https://cdn.gocn.vip/clickvisual/assets/img/alarm.c7d6042a.gif)
+![log-search](https://clickvisual.net/clickvisual/assets/img/alarm.c7d6042a.gif)
 
 ### DAG Workflow
-![log-search](https://cdn.gocn.vip/clickvisual/assets/img/dag.f8977497.png)
+![log-search](https://clickvisual.net/clickvisual/assets/img/cv-dag.9387fb05.png)
 
 ### Configuration Page
-![log-search](https://cdn.gocn.vip/clickvisual/assets/img/visual-configuration.62ebf9ad.png)
+![log-search](https://clickvisual.net/clickvisual/assets/img/visual-configuration.62ebf9ad.png)
 
 ## Features
 
@@ -38,7 +38,7 @@ See <https://clickvisual.net>
 
 ## Architecture
 
-![image](https://cdn.gocn.vip/clickvisual/assets/img/technical-architecture.f3cf8d04.png)
+![image](https://clickvisual.net/clickvisual/assets/img/technical-architecture.2858a64f.png)
 
 ## Installation
 
@@ -64,10 +64,10 @@ docker-compose up
 latest=$(curl -sL https://api.github.com/repos/clickvisual/clickvisual/releases/latest | grep  ".tag_name" | sed -E 's/.*"([^"]+)".*/\1/')
 
 # for MacOS amd64.
-wget "https://github.com/clickvisual/clickvisual/releases/download/${latest}/clickvisual-${latest}-darwin-amd64.tar.gz" -O clickvisual-${latest}.tar.gz 
+wget "https://github.com/clickvisual/clickvisual/releases/download/${latest}/clickvisual-${latest}-darwin-amd64.tar.gz" -O clickvisual-${latest}.tar.gz
 
 # for Linux amd64.
-wget "https://github.com/clickvisual/clickvisual/releases/download/${latest}/clickvisual-${latest}-linux-amd64.tar.gz" -O clickvisual-$(latest).tar.gz  
+wget "https://github.com/clickvisual/clickvisual/releases/download/${latest}/clickvisual-${latest}-linux-amd64.tar.gz" -O clickvisual-${latest}.tar.gz
 
 # extract zip file to current directory.
 mkdir -p ./clickvisual-${latest} && tar -zxvf clickvisual-${latest}.tar.gz -C ./clickvisual-${latest}
@@ -135,12 +135,15 @@ Thanks for these wonderful people:
 
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
+## Star History
+
+[![Star History Chart](https://star-history.dera.page/svg?repos=clickvisual/clickvisual&type=Date)](https://star-history.dera.page/#clickvisual/clickvisual&Date)
+
 ## Thank You
 - [腾源会/WeOpen](https://cloud.tencent.com/act/pro/weopen-home)
 
 ## Thank JetBrains for Open Source licenses support
 <a href="https://www.jetbrains.com/?from=Ego"><img src="https://resources.jetbrains.com/storage/products/company/brand/logos/GoLand_icon.svg" height="120" alt="JetBrains"/></a>
-
 
 ## Friends
 

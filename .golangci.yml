@@ -3,3 +3,7 @@ linters-settings:
     checks:
       - all
       - '-SA1019' # disable the rule SA1019
+issues:
+    exclude-dirs:
+      - ui
+      - dist

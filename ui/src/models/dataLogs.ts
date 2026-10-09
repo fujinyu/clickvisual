@@ -177,6 +177,10 @@ const DataLogsModel = () => {
     updateLogLibraryLoading,
     getLogLibraryLoading,
     doDeletedLogLibrary,
+    doDeletedManagementLogLibrary,
+    doCreatedManagementLogLibraryEachRow,
+    doCreatedManagementTableTemplate,
+    doCreatedManagementLocalLogLibraryBatch,
     getLocalTables,
     getTableColumns,
     doCreatedLocalLogLibrary,
@@ -375,7 +379,14 @@ const DataLogsModel = () => {
 
   const onCopyRawLogDetails = (log: any) => {
     if (log) {
-      copy(typeof log === "object" ? JSON.stringify(log) : log);
+      if (typeof log === "object") {
+        if (log._raw_log_ && typeof log._raw_log_ === "string") {
+          log._raw_log_ = JSON.parse(log._raw_log_)
+        }
+        copy(JSON.stringify(log, null, 2))
+      } else {
+        copy(JSON.stringify(JSON.parse(log), null, 2))
+      }
       message.success(formatMessage({ id: "log.item.copy.success" }));
     } else {
       message.error(formatMessage({ id: "log.item.copy.failed" }));
@@ -557,7 +568,7 @@ const DataLogsModel = () => {
     cancelTokenLogsRef.current?.();
     cancelTokenHighChartsRef.current?.();
     const currentPane = logPanesHelper.logPanes[id.toString()];
-    const histogramChecked = currentPane?.histogramChecked ?? true;
+    const histogramChecked = currentPane?.histogramChecked ?? false;
 
     const filterDisableIds =
       JSON.parse(
@@ -656,19 +667,19 @@ const DataLogsModel = () => {
 
     const defaultInput = isInterface
       ? lodash
-          .cloneDeep(keyword ? keyword : keywordInput)
-          ?.replace(
-            /(=|!=| like | not like )/gi,
-            CLICKVISUAL_LOGSPECIALCONNECTOR
-          )
-          ?.split(" and ") || [""]
+        .cloneDeep(keyword ? keyword : keywordInput)
+        ?.replace(
+          /(=|!=| like | not like )/gi,
+          CLICKVISUAL_LOGSPECIALCONNECTOR
+        )
+        ?.split(" and ") || [""]
       : lodash
-          .cloneDeep(keyword ? keyword : keywordInput)
-          ?.replace(
-            /(=|!=| like | not like )/gi,
-            CLICKVISUAL_LOGSPECIALCONNECTOR
-          )
-          ?.split(" AND ") || [""];
+        .cloneDeep(keyword ? keyword : keywordInput)
+        ?.replace(
+          /(=|!=| like | not like )/gi,
+          CLICKVISUAL_LOGSPECIALCONNECTOR
+        )
+        ?.split(" AND ") || [""];
 
     const strReg = new RegExp(
       "(`?w|.+`?)(" + CLICKVISUAL_LOGSPECIALCONNECTOR + ")'?([^']+)'?",
@@ -796,9 +807,8 @@ const DataLogsModel = () => {
     if (extra?.isIndex && extra?.indexKey) {
       currentSelected = `\`${extra.indexKey}\`='${value}'`;
     } else {
-      currentSelected = `${
-        extra?.key ? "`" + extra?.key + "`" : "_raw_log_"
-      } like '%${value}%'`;
+      currentSelected = `${extra?.key ? "`" + extra?.key + "`" : "`_raw_log_`"
+        } like '%${value}%'`;
     }
     doUpdatedQuery(currentSelected);
   };
@@ -811,9 +821,8 @@ const DataLogsModel = () => {
     if (extra?.isIndex && extra?.indexKey) {
       currentSelected = `\`${extra.indexKey}\`!='${value}'`;
     } else {
-      currentSelected = `${
-        extra?.key ? "`" + extra?.key + "`" : "_raw_log_"
-      } not like '%${value}%'`;
+      currentSelected = `${extra?.key ? "`" + extra?.key + "`" : "`_raw_log_`"
+        } not like '%${value}%'`;
     }
     doUpdatedQuery(currentSelected);
   };
@@ -922,6 +931,10 @@ const DataLogsModel = () => {
     doCreatedTableTemplate,
     doCreatedLogLibraryEachRow,
     doDeletedLogLibrary,
+    doDeletedManagementLogLibrary,
+    doCreatedManagementLogLibraryEachRow,
+    doCreatedManagementTableTemplate,
+    doCreatedManagementLocalLogLibraryBatch,
     doGetLogLibrary,
     doUpdateLogLibrary,
     updateLogLibraryLoading,

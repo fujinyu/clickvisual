@@ -16,6 +16,7 @@ import (
 
 	"github.com/clickvisual/clickvisual/api/internal/invoker"
 	"github.com/clickvisual/clickvisual/api/internal/pkg/component/core"
+	appconfig "github.com/clickvisual/clickvisual/api/internal/pkg/config"
 	db2 "github.com/clickvisual/clickvisual/api/internal/pkg/model/db"
 	"github.com/clickvisual/clickvisual/api/internal/pkg/model/view"
 	"github.com/clickvisual/clickvisual/api/internal/service/alarm/alertcomponent"
@@ -84,6 +85,12 @@ type alert struct {
 func NewAlarm() *alert {
 	a := &alert{
 		reloadChan: make(chan int64, reloadTimes),
+	}
+	if appconfig.IsPrivateLiteMode() {
+		return a
+	}
+	if invoker.Db == nil {
+		return a
 	}
 	go func() {
 		for r := range a.reloadChan {
@@ -275,7 +282,13 @@ func (i *alert) PrometheusRuleBatchRemove(clusterRuleGroups map[string]db2.Clust
 }
 
 func (i *alert) DeletePrometheusRule(instance *db2.BaseInstance, obj *db2.Alarm) (err error) {
-	if obj.AlertRules == nil || len(obj.AlertRules) == 0 {
+	if instance == nil {
+		return fmt.Errorf("instance is nil")
+	}
+	if obj == nil {
+		return fmt.Errorf("alarm is nil")
+	}
+	if len(obj.AlertRules) == 0 {
 		// v1 version
 		return alarmRuleDelete(instance, obj.GetGroupName(instance.ID), obj.RuleName(0))
 	} else {
@@ -615,6 +628,9 @@ func (i *alert) IsAllClosed(iid int) (err error) {
 }
 
 func AllPrometheusReload() {
+	if invoker.Db == nil {
+		return
+	}
 	instances, err := db2.InstanceList(egorm.Conds{})
 	if err != nil {
 		elog.Error("AllPrometheusReload", elog.String("step", "InstanceList"), elog.String("error", err.Error()))

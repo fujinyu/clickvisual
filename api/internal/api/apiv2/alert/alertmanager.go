@@ -3,6 +3,8 @@ package alert
 import (
 	"strings"
 
+	"github.com/gotomicro/cetus/l"
+
 	"github.com/gotomicro/ego/core/elog"
 
 	"github.com/clickvisual/clickvisual/api/internal/pkg/component/core"
@@ -22,15 +24,17 @@ func Webhook(c *core.Context) {
 	var notification db.Notification
 	err := c.Bind(&notification)
 	if err != nil {
-		elog.Error("webhook", elog.Any("notification", notification))
+		elog.Error("Bind", elog.FieldMethod("Webhook"), elog.Any("notification", notification))
 		c.JSONE(1, "invalid parameter", err)
 		return
 	}
-	elog.Info("alarm", elog.Any("notification", notification))
+	elog.Info("alert", elog.FieldMethod("Webhook"), l.A("notification", notification))
 	err = service.Alert.HandlerAlertManager(strings.TrimSpace(notification.CommonLabels["uuid"]), strings.TrimSpace(notification.CommonLabels["filterId"]), notification)
 	if err != nil {
+		elog.Error("HandlerAlertManager", elog.FieldMethod("Webhook"), elog.Any("notification", notification), l.E(err))
 		c.JSONE(1, "message send failed: "+err.Error(), err)
 		return
 	}
+	elog.Debug("finish", elog.FieldMethod("Webhook"), elog.Any("notification", notification))
 	c.JSONOK()
 }

@@ -49,18 +49,18 @@ func (a *Agent) parseHitLog(k8sClientType string, item view.RespAgentSearchItem)
 	log = make(map[string]interface{})
 	curTime, indexValue := utils.IndexParseTime(line)
 	if indexValue != -1 {
-		curTimeParser := utils.TimeParse(curTime)
-		if curTimeParser != nil {
-			ts := curTimeParser.Unix()
-			if k8sClientType == cvdocker.ClientTypeContainerd {
-				line = utils.GetFilterK8SContainerdWrapLog(line)
-			}
-			log[db.TimeFieldSecond] = ts
-			log["_raw_log_"] = line
-			for k, v := range item.Ext {
-				log[k] = v
-			}
+		//curTimeParser := utils.TimeParse(curTime)
+		//if curTimeParser != nil {
+		ts := curTime
+		if k8sClientType == cvdocker.ClientTypeContainerd {
+			line = utils.GetFilterK8SContainerdWrapLog(line)
 		}
+		log[db.TimeFieldSecond] = ts
+		log["_raw_log_"] = line
+		for k, v := range item.Ext {
+			log[k] = v
+		}
+		//}
 	} else {
 		log = nil
 	}
@@ -123,6 +123,7 @@ func (a *Agent) GetLogs(query view.ReqQuery, i int) (resp view.RespQuery, err er
 	} else {
 		resp.Logs = tmpLogs
 	}
+	factory.RemoveEmptyValues(resp.Logs)
 	sort.Slice(resp.Logs, func(i, j int) bool {
 		return resp.Logs[i][db.TimeFieldSecond].(int64) > resp.Logs[j][db.TimeFieldSecond].(int64)
 	})

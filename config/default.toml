@@ -1,10 +1,13 @@
 [app]
 isMultiCopy = true  # multi-copy mode: Redis must be configured, otherwise the service cannot start
+# v2 edition: full keeps all v2 modules; private-lite keeps only log query related v2 modules.
+v2Edition = "full" # full | private-lite
 secretKey = "secretKey"
 rootURL = "http://localhost:9001"
 baseURL = "/api/admin/login/"
 permissionFile = './config/resource.yaml'
 serveFromSubPath = false
+encryptionKey= "00112233445566778899aabbccddeeff"
 
 [casbin.rule]
 path = "./config/rbac.conf"
@@ -20,7 +23,27 @@ maxAge = 86400
 [logger]
 # log level, available level: "debug", "info", "warn", "error", "panic", "fatal"
 level = "info"
+writer = "stderr"
 name = "clickvisual.log"
+debug = true
+
+[report.summary.ai]
+enabled = false
+baseURL = "https://api.openai.com"
+apiKey = ""
+model = ""
+timeout = 5
+maxRows = 5
+
+[report.aggregation]
+# Extend the default pre-aggregation whitelist without modifying code.
+allowedFields = []
+allowedGroupByFields = []
+
+# metadata database. Defaults to [mysql] when driver/dsn is not configured.
+[metadata]
+driver = "mysql" # mysql sqlite
+dsn = ""
 debug = true
 
 # if isMultiCopy is true
@@ -33,6 +56,8 @@ password = "VFBAmtMnOoG6GLqz"
 
 [mysql]
 debug = true
+# metadata database attach retry interval when MySQL or schema is not ready during startup.
+attachRetryInterval = "5s"
 # database DSN
 #dsn = "root:123456@tcp(127.0.0.1:33306)/clickvisual?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&readTimeout=1s&timeout=1s&writeTimeout=3s"
 dsn = "ilogtail:JzFtX4Jtbvm4Tk^a@tcp(172.16.128.54:3306)/clickvisual?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&readTimeout=1s&timeout=1s&writeTimeout=3s"

@@ -14,16 +14,16 @@ ClickVisual 是一个轻量级的基于浏览器的日志分析和查询平台�
 访问 <https://clickvisual.net/> 查看最新文档。
 
 ### 日志查询演示
-![log-search](https://cdn.gocn.vip/clickvisual/assets/img/logs.b24e990e.gif)
+![log-search](https://clickvisual.net/clickvisual/assets/img/logs.b24e990e.gif)
 
 ### 告警配置演示
-![log-search](https://cdn.gocn.vip/clickvisual/assets/img/alarm.c7d6042a.gif)
+![log-search](https://clickvisual.net/clickvisual/assets/img/alarm.c7d6042a.gif)
 
 ### DAG 工作流
-![log-search](https://cdn.gocn.vip/clickvisual/assets/img/dag.f8977497.png)
+![log-search](https://clickvisual.net/clickvisual/assets/img/cv-dag.9387fb05.png)
 
 ### 可视化配置界面
-![log-search](https://cdn.gocn.vip/clickvisual/assets/img/visual-configuration.62ebf9ad.png)
+![log-search](https://clickvisual.net/clickvisual/assets/img/visual-configuration.62ebf9ad.png)
 
 ## 特性
 
@@ -34,7 +34,7 @@ ClickVisual 是一个轻量级的基于浏览器的日志分析和查询平台�
 
 ## 架构
 
-![image](https://cdn.gocn.vip/clickvisual/assets/img/technical-architecture.f3cf8d04.png)
+![image](https://clickvisual.net/clickvisual/assets/img/technical-architecture.2858a64f.png)
 
 ## 安装方法
 
@@ -60,10 +60,10 @@ docker-compose up
 latest=$(curl -sL https://api.github.com/repos/clickvisual/clickvisual/releases/latest | grep  ".tag_name" | sed -E 's/.*"([^"]+)".*/\1/')
 
 # MacOs 下下载
-wget "https://github.com/clickvisual/clickvisual/releases/download/${latest}/clickvisual-${latest}-darwin-amd64.tar.gz" -O clickvisual-${latest}.tar.gz 
+wget "https://github.com/clickvisual/clickvisual/releases/download/${latest}/clickvisual-${latest}-darwin-amd64.tar.gz" -O clickvisual-${latest}.tar.gz
 
 # Linux 下下载
-wget "https://github.com/clickvisual/clickvisual/releases/download/${latest}/clickvisual-${latest}-linux-amd64.tar.gz" -O clickvisual-$(latest).tar.gz  
+wget "https://github.com/clickvisual/clickvisual/releases/download/${latest}/clickvisual-${latest}-linux-amd64.tar.gz" -O clickvisual-${latest}.tar.gz
 
 # 解压 tar.gz 包到 ./clickvisual 目录
 mkdir -p ./clickvisual-${latest} && tar -zxvf clickvisual-${latest}.tar.gz -C ./clickvisual-${latest}

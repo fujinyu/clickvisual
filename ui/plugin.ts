@@ -18,12 +18,21 @@ export default (api: IApi) => {
     {
       name: "keywords",
       content: "ClickVisual, clickvisual, CLICKVISUAL, Clickhouse, shimo",
+      unsupport: true,
     },
     { name: "author", content: "@clickvisual" },
   ]);
 
   api.addHTMLLinks(() => [
     { rel: "icon", type: "image/x-icon", href: "./cv.png" },
+    {
+      rel: "preconnect",
+      href: "https://fonts.googleapis.com",
+    },
+    {
+      rel: "stylesheet",
+      href: "https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&display=swap",
+    },
     {
       rel: "stylesheet",
       href: handleResourcePath("luckysheet/css/pluginsCss.css"),

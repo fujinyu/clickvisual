@@ -1,0 +1,33 @@
+name: docs-cv
+on:
+  push:
+    branches:
+      - 'master'
+      - 'fix/ci'
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout codebase
+        uses: actions/checkout@v3
+      - name: Setup node
+        uses: actions/setup-node@v3
+      - name: Build docs
+        run: cd docs && export NODE_OPTIONS=--openssl-legacy-provider && yarn install && yarn run docs:build
+      - name: Install obsutil
+        run: |
+          cd docs
+          wget https://obs-community.obs.cn-north-1.myhuaweicloud.com/obsutil/current/obsutil_linux_amd64.tar.gz
+          tar -zxvf obsutil_linux_amd64.tar.gz
+          obsutil_bin="$(find "$PWD" -maxdepth 2 -type f -name obsutil -print -quit)"
+          test -n "$obsutil_bin"
+          chmod 755 "$obsutil_bin"
+          echo "OBSUTIL_BIN=$obsutil_bin" >> "$GITHUB_ENV"
+      - name: Config obsutil
+        run: |
+          cd docs
+          "$OBSUTIL_BIN" config -i "${{ secrets.OBS_ACCESS_KEY_ID }}" -k "${{ secrets.OBS_ACCESS_KEY_SECRET }}" -e https://obs.cn-north-4.myhuaweicloud.com
+      - name: Upload docs by obsutil
+        run: |
+          cd docs
+          "$OBSUTIL_BIN" cp ./docs/.vuepress/dist obs://open-read/clickvisual/dist -f -r -flat
