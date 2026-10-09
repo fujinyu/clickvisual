@@ -1868,6 +1868,8 @@ func (c *ClickHouseX) timeParseJSONAsString(typ int, v *db.BaseView, timeField, 
 	if timeFieldParent != "" {
 		l = fmt.Sprintf("JSONExtractRaw(_log, '%s')", timeFieldParent)
 	}
+	// time_ns 以 Int64 精确提取，避免 Float64 精度丢失导致 _time_nanosecond_ 错乱
+	timeNsField := fmt.Sprintf("JSONExtractInt(%s, 'time_ns')", l)
 	if v != nil && v.Format == "fromUnixTimestamp64Micro" && v.IsUseDefaultTime == 0 {
 		timeField = fmt.Sprintf("JSONExtractInt(%s, '%s')", l, timeField)
 	} else if typ == factory.TableTypeFloat {
@@ -1875,14 +1877,16 @@ func (c *ClickHouseX) timeParseJSONAsString(typ int, v *db.BaseView, timeField, 
 	} else {
 		timeField = fmt.Sprintf("JSONExtractString(%s, '%s')", l, timeField)
 	}
-	return c.timeParseSQL(typ, v, timeField, rawLogField)
+	return c.timeParseSQL(typ, v, timeField, timeNsField, rawLogField)
 }
 
-func (c *ClickHouseX) timeParseSQL(typ int, v *db.BaseView, timeField, rawLogField string) string {
+func (c *ClickHouseX) timeParseSQL(typ int, v *db.BaseView, timeField, timeNsField, rawLogField string) string {
 	if timeField == "" {
 		timeField = "time"
 	}
-	timeNsField := "time_ns"
+	if timeNsField == "" {
+		timeNsField = "time_ns"
+	}
 	if v != nil && v.Format == "fromUnixTimestamp64Micro" && v.IsUseDefaultTime == 0 {
 		return fmt.Sprintf(nanosecondTimeParse, rawLogField, v.Key, rawLogField, v.Key)
 	}
@@ -1940,13 +1944,13 @@ func (c *ClickHouseX) updateSwitcherJSONEachRow(typ, tid int, did int, table, cu
 	var timeConv string
 	var whereCond string
 	if customTimeField == "" {
-		timeConv = c.timeParseSQL(typ, nil, ct.TimeField, ct.GetRawLogField())
+		timeConv = c.timeParseSQL(typ, nil, ct.TimeField, "time_ns", ct.GetRawLogField())
 		whereCond = c.whereConditionSQLDefault(list, ct.GetRawLogField())
 	} else {
 		if current == nil {
 			return "", errors.New("the process processes abnormal data errors, current view cannot be nil")
 		}
-		timeConv = c.timeParseSQL(typ, current, ct.TimeField, ct.GetRawLogField())
+		timeConv = c.timeParseSQL(typ, current, ct.TimeField, "time_ns", ct.GetRawLogField())
 		whereCond = c.whereConditionSQLCurrent(current, ct.GetRawLogField())
 	}
 	rs := db.ReplicaStatusNo
@@ -2045,6 +2049,32 @@ func (c *ClickHouseX) switcherRollback(tid int, key string) {
 	}
 }
 
+// hasLogIdColumn 判断表是否含 log_id 列：解析建表元数据 AnyJSON 的字段映射（SourceMapping）。
+// 元数据缺失或未包含 log_id（老表）时返回 false，排序降级为单键，避免查询因无该列而报错。
+func (c *ClickHouseX) hasLogIdColumn(tid int) bool {
+	tableInfo, _ := db.TableInfo(invoker.Db, tid)
+	if tableInfo.AnyJSON == "" {
+		return false
+	}
+	rsc := view.ReqStorageCreateUnmarshal(tableInfo.AnyJSON)
+	for _, item := range rsc.SourceMapping.Data {
+		if item.Key == db.LogIdField {
+			return true
+		}
+	}
+	return false
+}
+
+// orderByClause 构造排序子句：_time_nanosecond_ 同值时用 log_id 作为次级排序键保证稳定有序、翻页不重复。
+// 次级键方向与主键一致（log_id 单调递增，同 time_ns 内 log_id 大=时间晚）。无 log_id 列时降级为单键。
+func (c *ClickHouseX) orderByClause(orderByField, orderBy string, tid int) string {
+	clause := fmt.Sprintf("%s %s", orderByField, orderBy)
+	if c.hasLogIdColumn(tid) {
+		clause += fmt.Sprintf(", `%s` %s", db.LogIdField, orderBy)
+	}
+	return clause
+}
+
 func (c *ClickHouseX) logsTimelineSQL(param view.ReqQuery, tid int) (sql string) {
 	conds := egorm.Conds{}
 	conds["tid"] = tid
@@ -2053,7 +2083,7 @@ func (c *ClickHouseX) logsTimelineSQL(param view.ReqQuery, tid int) (sql string)
 	if len(views) > 0 {
 		orderByField = db.TimeFieldNanoseconds
 	}
-	sql = fmt.Sprintf("SELECT %s FROM %s WHERE "+genTimeCondition(param)+" %s ORDER BY "+orderByField+" DESC LIMIT %d",
+	sql = fmt.Sprintf("SELECT %s FROM %s WHERE "+genTimeCondition(param)+" %s ORDER BY "+c.orderByClause(orderByField, "DESC", tid)+" LIMIT %d",
 		param.TimeField,
 		param.DatabaseTable,
 		param.ST, param.ET,
@@ -2101,7 +2131,7 @@ func (c *ClickHouseX) logsSQL(param view.ReqQuery, tid int) (sql, optSQL, origin
 	//}
 	c3 := time.Since(st).Milliseconds()
 	originalWhere = c.queryTransform(param, false)
-	sql = fmt.Sprintf("SELECT %s FROM %s WHERE "+genTimeCondition(param)+" %s ORDER BY "+orderByField+" "+orderBy+"  LIMIT %d OFFSET %d",
+	sql = fmt.Sprintf("SELECT %s FROM %s WHERE "+genTimeCondition(param)+" %s ORDER BY "+c.orderByClause(orderByField, orderBy, tid)+"  LIMIT %d OFFSET %d",
 		selectFields,
 		param.DatabaseTable,
 		param.ST, param.ET,

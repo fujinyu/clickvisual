@@ -3,6 +3,7 @@ package mapping
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"reflect"
 	"strings"
 
@@ -41,10 +42,22 @@ func (m *Item) AssembleJSONAsString() (res string) {
 	if m.Typ == "Float64" {
 		return fmt.Sprintf("JSONExtractFloat(%s) AS `%s`,", field, m.Key)
 	}
+	if m.Typ == "Int64" {
+		return fmt.Sprintf("JSONExtractInt(%s) AS `%s`,", field, m.Key)
+	}
 	if m.Typ == "Bool" {
 		return fmt.Sprintf("JSONExtractBool(%s) AS `%s`,", field, m.Key)
 	}
 	return fmt.Sprintf("JSONExtractRaw(%s) AS `%s`,", field, m.Key)
+}
+
+// judgeNumber 数值类型判定：整数值且超出 Float64 精确范围(2^53)的大整数映射为 Int64，
+// 避免 log_id/time_ns 这类 19 位整数存储时精度丢失；其余数值保持 Float64。
+func judgeNumber(v float64) string {
+	if v == math.Trunc(v) && math.Abs(v) > math.Pow(2, 53) {
+		return "Int64"
+	}
+	return "Float64"
 }
 
 func Handle(req string, checkInner bool) (res List, err error) {
@@ -132,7 +145,7 @@ func fieldTypeJudgment(req interface{}) string {
 	case map[string]interface{}:
 		val = FieldTypeJSON
 	case float64:
-		val = "Float64"
+		val = judgeNumber(req)
 	case bool:
 		val = "Bool"
 	default:
@@ -160,7 +173,7 @@ func fieldTypeJudgmentInner(req interface{}) string {
 	case map[string]interface{}:
 		val = FieldTypeJSON
 	case float64:
-		val = "Float64"
+		val = judgeNumber(reqType)
 	case bool:
 		val = "Bool"
 	default:

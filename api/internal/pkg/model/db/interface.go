@@ -39,6 +39,7 @@ var Datasource2IntORM = map[string]int{
 
 const TimeFieldSecond = "_time_second_"
 const TimeFieldNanoseconds = "_time_nanosecond_"
+const LogIdField = "log_id"
 
 const (
 	SuffixJaegerJSON = "_jaeger_dependencies"
