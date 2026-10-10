@@ -356,6 +356,27 @@ export default {
   "datasource.logLibrary.from.label.timeField": "time field",
   "datasource.logLibrary.from.rawLogField": "rawLog field",
   "datasource.logLibrary.from.days": "Log Retention Days",
+  "datasource.logLibrary.from.storagePolicy": "Storage Policy",
+  "datasource.logLibrary.from.storagePolicy.tip":
+    "ClickHouse only. Pick a policy to enable hot/cold tiering.",
+  "datasource.logLibrary.from.storagePolicy.placeholder":
+    "Default (single-layer)",
+  "datasource.logLibrary.from.storagePolicy.disabled": "Disabled",
+  "datasource.logLibrary.from.coldVolume": "Cold Volume",
+  "datasource.logLibrary.from.coldVolume.placeholder": "Select a cold volume",
+  "datasource.logLibrary.from.coldVolume.required":
+    "Cold volume is required once a storage policy is picked",
+  "datasource.logLibrary.from.hotDays": "Hot Days",
+  "datasource.logLibrary.from.hotDays.placeholder":
+    "Days kept on hot volume, must be less than retention days",
+  "datasource.logLibrary.from.hotDays.required":
+    "Hot days is required once a storage policy is picked",
+  "datasource.logLibrary.from.hotDays.positive":
+    "Hot days must be a positive integer",
+  "datasource.logLibrary.from.hotDays.lessThan":
+    "Hot days must be less than retention days ({days})",
+  "datasource.logLibrary.from.hotDays.lessThanOrEqual":
+    "Hot days must not exceed retention days ({total})",
   "datasource.logLibrary.from.brokers": "Brokers",
   "datasource.logLibrary.from.topics": "Topics",
   "datasource.logLibrary.from.consumers": "Consumers",

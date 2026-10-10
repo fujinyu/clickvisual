@@ -658,6 +658,12 @@ func (c *Databend) ListColumn(database, table string, isTimeField bool) (res []*
 	return
 }
 
+// ListStoragePolicies is intentionally unsupported on Databend. ClickVisual's
+// hot/cold tiering feature is ClickHouse-specific.
+func (c *Databend) ListStoragePolicies() ([]*view2.RespStoragePolicy, error) {
+	return nil, errors.New("storage policies are only supported on ClickHouse instances")
+}
+
 func (c *Databend) DeleteTraceJaegerDependencies(database, cluster, table string) (err error) {
 	table = table + db2.SuffixJaegerJSON
 	_, err = c.db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s.%s;", database, table))

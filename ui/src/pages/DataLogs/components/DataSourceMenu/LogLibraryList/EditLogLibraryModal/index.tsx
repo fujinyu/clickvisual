@@ -44,6 +44,10 @@ const EditLogLibraryModal = (props: { onGetList: any }) => {
             kafkaTopic: res.data.topic,
             mergeTreeTTL: res.data.days,
             v3TableType: Boolean(res.data?.v3TableType),
+            // Tiering metadata is read-only here; only hotDays/mergeTreeTTL are editable.
+            storagePolicy: res.data.storagePolicy || "",
+            coldVolume: res.data.coldVolume || "",
+            hotDays: res.data.hotDays || undefined,
           });
         })
         .catch((res) => {
@@ -151,6 +155,101 @@ const EditLogLibraryModal = (props: { onGetList: any }) => {
                 }
               )}
             />
+          </Form.Item>
+          {/*
+            ClickHouse hot/cold tiering. policy + volume are locked after
+            creation; only hotDays is editable and only when the table already
+            has a cold volume (backend UpdateMergeTreeTable ignores otherwise).
+          */}
+          <Form.Item
+            hidden
+            noStyle
+            shouldUpdate={(prev, next) =>
+              prev.coldVolume !== next.coldVolume ||
+              prev.storagePolicy !== next.storagePolicy
+            }
+          >
+            {({ getFieldValue }) => {
+              const policy = getFieldValue("storagePolicy");
+              const cold = getFieldValue("coldVolume");
+              if (!policy && !cold) return null;
+              return (
+                <>
+                  <Form.Item
+                    label={i18n.formatMessage({
+                      id: "datasource.logLibrary.from.storagePolicy",
+                    })}
+                  >
+                    <Input disabled value={policy || ""} />
+                  </Form.Item>
+                  <Form.Item
+                    label={i18n.formatMessage({
+                      id: "datasource.logLibrary.from.coldVolume",
+                    })}
+                  >
+                    <Input disabled value={cold || ""} />
+                  </Form.Item>
+                </>
+              );
+            }}
+          </Form.Item>
+          <Form.Item
+            noStyle
+            shouldUpdate={(prev, next) =>
+              prev.coldVolume !== next.coldVolume ||
+              prev.mergeTreeTTL !== next.mergeTreeTTL
+            }
+          >
+            {({ getFieldValue }) => {
+              const cold = getFieldValue("coldVolume");
+              if (!cold) return null;
+              const total = getFieldValue("mergeTreeTTL");
+              return (
+                <Form.Item
+                  label={i18n.formatMessage({
+                    id: "datasource.logLibrary.from.hotDays",
+                  })}
+                  name={"hotDays"}
+                  rules={[
+                    {
+                      validator: (_, value) => {
+                        if (value == null || value === "") return Promise.resolve();
+                        const n = Number(value);
+                        if (!Number.isInteger(n) || n <= 0)
+                          return Promise.reject(
+                            new Error(
+                              i18n.formatMessage({
+                                id: "datasource.logLibrary.from.hotDays.positive",
+                              })
+                            )
+                          );
+                        if (total != null && n > Number(total))
+                          return Promise.reject(
+                            new Error(
+                              i18n.formatMessage(
+                                {
+                                  id: "datasource.logLibrary.from.hotDays.lessThanOrEqual",
+                                },
+                                { total }
+                              )
+                            )
+                          );
+                        return Promise.resolve();
+                      },
+                    },
+                  ]}
+                >
+                  <InputNumber
+                    disabled={!isCVCreate}
+                    min={1}
+                    style={{ width: "100%" }}
+                    placeholder={i18n.formatMessage({
+                      id: "datasource.logLibrary.from.hotDays.placeholder",
+                    })}
+                  />
+                </Form.Item>
+              );
+            }}
           </Form.Item>
           <Form.Item label="ConsumerNum" name={"kafkaConsumerNum"}>
             <InputNumber

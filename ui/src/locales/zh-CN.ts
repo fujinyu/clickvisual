@@ -347,6 +347,22 @@ export default {
   "datasource.logLibrary.from.label.timeField": "时间字段",
   "datasource.logLibrary.from.rawLogField": "项目日志字段",
   "datasource.logLibrary.from.days": "日志保存天数",
+  "datasource.logLibrary.from.storagePolicy": "存储策略",
+  "datasource.logLibrary.from.storagePolicy.tip":
+    "仅 ClickHouse 支持。选择后可以在热/冷卷之间自动迁移数据。",
+  "datasource.logLibrary.from.storagePolicy.placeholder": "默认 (不启用冷热分层)",
+  "datasource.logLibrary.from.storagePolicy.disabled": "不启用",
+  "datasource.logLibrary.from.coldVolume": "冷数据卷",
+  "datasource.logLibrary.from.coldVolume.placeholder": "请选择冷数据卷",
+  "datasource.logLibrary.from.coldVolume.required": "启用冷热分层时冷数据卷必填",
+  "datasource.logLibrary.from.hotDays": "热数据天数",
+  "datasource.logLibrary.from.hotDays.placeholder": "热层保留天数，需小于总天数",
+  "datasource.logLibrary.from.hotDays.required": "启用冷热分层时热数据天数必填",
+  "datasource.logLibrary.from.hotDays.positive": "热数据天数必须为正整数",
+  "datasource.logLibrary.from.hotDays.lessThan":
+    "热数据天数必须小于日志保存天数 ({days})",
+  "datasource.logLibrary.from.hotDays.lessThanOrEqual":
+    "热数据天数不得大于日志保存天数 ({total})",
   "datasource.logLibrary.from.brokers": "Brokers",
   "datasource.logLibrary.from.topics": "Topics",
   "datasource.logLibrary.from.consumers": "Consumers",

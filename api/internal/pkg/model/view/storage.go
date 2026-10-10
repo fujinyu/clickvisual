@@ -31,6 +31,12 @@ type ReqStorageCreate struct {
 	RawLogFieldParent       string       `form:"rawLogFieldParent"`
 	SourceMapping           mapping.List `form:"-"`
 	CreateType              int          `form:"createType"`
+
+	// ClickHouse hot/cold tiering (all zero/empty values keep the legacy single-layer behavior).
+	// Validation happens in service.StorageCreate against system.storage_policies.
+	StoragePolicy string `form:"storagePolicy"` // storage_policy name, empty means disabled
+	ColdVolume    string `form:"coldVolume"`    // TTL TO VOLUME target, empty means disabled
+	HotDays       int    `form:"hotDays"`       // days before moving to cold volume; 0 or >=Days means single-layer
 }
 
 type ReqCreateStorageByTemplateEgo struct {
@@ -186,6 +192,22 @@ type RespStorageAnalysisFields struct {
 	SupportsGlobalMatch bool                   `json:"supportsGlobalMatch"`
 }
 
+// RespStoragePolicy mirrors a ClickHouse storage policy as read from
+// system.storage_policies, aggregated by policy_name so that the UI can offer
+// one dropdown for policy and derive the "cold volume" candidate list without
+// a second round-trip.
+type RespStoragePolicy struct {
+	PolicyName string           `json:"policyName"`
+	Volumes    []RespVolumeInfo `json:"volumes"`
+}
+
+// RespVolumeInfo is one volume entry inside a storage policy.
+type RespVolumeInfo struct {
+	Name  string   `json:"name"`
+	Index int      `json:"index"`
+	Disks []string `json:"disks"`
+}
+
 type StorageAnalysisField struct {
 	Id         int    `json:"id"`
 	Tid        int    `json:"tid"`
@@ -207,6 +229,12 @@ type ReqStorageUpdate struct {
 	KafkaSkipBrokenMessages int    `form:"kafkaSkipBrokenMessages"`
 	Desc                    string `form:"desc"`
 	V3TableType             int    `form:"v3TableType"`
+
+	// HotDays is the only hot/cold tiering field users may change after table
+	// creation. storage_policy / cold_volume are intentionally not exposed here
+	// because the user contract forbids switching a live table between tiering
+	// modes. When the underlying table has no cold volume, this field is ignored.
+	HotDays int `form:"hotDays"`
 }
 
 type (

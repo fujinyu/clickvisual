@@ -25,6 +25,7 @@ import (
 	"github.com/clickvisual/clickvisual/api/internal/pkg/model/db"
 	"github.com/clickvisual/clickvisual/api/internal/pkg/model/dto"
 	"github.com/clickvisual/clickvisual/api/internal/pkg/model/view"
+	"github.com/clickvisual/clickvisual/api/internal/pkg/utils"
 	"github.com/clickvisual/clickvisual/api/internal/service/inquiry/factory"
 	"github.com/clickvisual/clickvisual/api/internal/service/inquiry/factory/builder"
 	"github.com/clickvisual/clickvisual/api/internal/service/inquiry/factory/builder/bumo"
@@ -948,6 +949,67 @@ func (c *ClickHouseX) ListColumn(database, table string, isTimeField bool) (res 
 	return
 }
 
+// ListStoragePolicies aggregates system.storage_policies rows into per-policy
+// volume lists. Rows are ordered by (policy, volume_index, disk) so callers
+// can safely take the last volume as the default "cold" target.
+func (c *ClickHouseX) ListStoragePolicies() (res []*view.RespStoragePolicy, err error) {
+	res = make([]*view.RespStoragePolicy, 0)
+	const q = "SELECT policy_name, volume_name, volume_index, disk_name FROM system.storage_policies ORDER BY policy_name, volume_index, disk_name"
+	rows, err := c.doQueryWithRetry(q, false)
+	if err != nil {
+		return nil, errors.WithMessage(err, "query system.storage_policies")
+	}
+	policyPos := make(map[string]int)
+	volumePos := make(map[string]map[int]int)
+	for _, row := range rows {
+		pn, _ := row["policy_name"].(string)
+		vn, _ := row["volume_name"].(string)
+		dn, _ := row["disk_name"].(string)
+		vi := toIntFromCK(row["volume_index"])
+		if pn == "" {
+			continue
+		}
+		pi, ok := policyPos[pn]
+		if !ok {
+			res = append(res, &view.RespStoragePolicy{PolicyName: pn, Volumes: make([]view.RespVolumeInfo, 0)})
+			pi = len(res) - 1
+			policyPos[pn] = pi
+			volumePos[pn] = make(map[int]int)
+		}
+		p, exists := volumePos[pn][vi]
+		if !exists {
+			res[pi].Volumes = append(res[pi].Volumes, view.RespVolumeInfo{Name: vn, Index: vi, Disks: make([]string, 0)})
+			p = len(res[pi].Volumes) - 1
+			volumePos[pn][vi] = p
+		}
+		if dn != "" {
+			res[pi].Volumes[p].Disks = append(res[pi].Volumes[p].Disks, dn)
+		}
+	}
+	return
+}
+
+// toIntFromCK normalises the integer types returned by clickhouse-go v2 for
+// small unsigned columns (UInt64 / UInt32 / Int64 depending on server).
+func toIntFromCK(v interface{}) int {
+	switch x := v.(type) {
+	case uint64:
+		return int(x)
+	case uint32:
+		return int(x)
+	case uint16:
+		return int(x)
+	case uint8:
+		return int(x)
+	case int:
+		return x
+	case int64:
+		return int(x)
+	default:
+		return 0
+	}
+}
+
 // UpdateLogAnalysisFields Data table index operation
 func (c *ClickHouseX) UpdateLogAnalysisFields(database db.BaseDatabase, table db.BaseTable, adds map[string]*db.BaseIndex, dels map[string]*db.BaseIndex, newList map[string]*db.BaseIndex) (err error) {
 	// step 1 drop
@@ -1164,6 +1226,10 @@ func (c *ClickHouseX) CreateStorageJSONAsString(database db.BaseDatabase, ct vie
 		Conn:       c.Conn(),
 		Fields:     ct.Mapping2String(true, ct.RawLogFieldParent),
 		TTL:        ct.Days,
+
+		StoragePolicy: ct.StoragePolicy,
+		ColdVolume:    ct.ColdVolume,
+		HotDays:       ct.HotDays,
 	}).Create()
 	if err != nil {
 		return
@@ -1238,8 +1304,11 @@ func (c *ClickHouseX) CreateStorage(did int, database db.BaseDatabase, ct view.R
 		LogField:         ct.RawLogField,
 		TimeField:        ct.TimeField,
 		Data: bumo.ParamsData{
-			TableName: dName,
-			Days:      ct.Days,
+			TableName:     dName,
+			Days:          ct.Days,
+			StoragePolicy: ct.StoragePolicy,
+			ColdVolume:    ct.ColdVolume,
+			HotDays:       ct.HotDays,
 		},
 	}
 	streamParams := bumo.Params{
@@ -1313,16 +1382,30 @@ func (c *ClickHouseX) CreateStorage(did int, database db.BaseDatabase, ct view.R
 }
 
 // UpdateMergeTreeTable ...
-// ALTER TABLE dev.test MODIFY TTL toDateTime(time_second) + toIntervalDay(7)
+// Without hot/cold: ALTER TABLE dev.test MODIFY TTL toDateTime(_time_second_) + INTERVAL 7 DAY
+// With hot/cold:    ALTER TABLE dev.test MODIFY TTL toDateTime(_time_second_) + INTERVAL 15 DAY TO VOLUME 'cold', toDateTime(_time_second_) + INTERVAL 29 DAY
 func (c *ClickHouseX) UpdateMergeTreeTable(tableInfo *db.BaseTable, params view.ReqStorageUpdate) (err error) {
 	isCluster, err := c.isCluster(tableInfo.Database.Cluster)
 	if err != nil {
 		return errors.Wrap(err, "get isCluster error")
 	}
-	s := fmt.Sprintf("ALTER TABLE %s%s MODIFY TTL toDateTime(_time_second_) + toIntervalDay(%d)",
+	// Hot/cold tiering is decided by what the table was created with; per user
+	// contract, storage_policy and cold volume can never be changed here, only
+	// the two day counts may move. When coldVolume is empty we fall back to the
+	// historical single-layer MODIFY TTL.
+	ttlExpr, err := utils.BuildTTLExpression(
+		tableInfo.GetTimeField(),
+		tableInfo.ColdVolume,
+		params.HotDays,
+		params.MergeTreeTTL,
+	)
+	if err != nil {
+		return errors.Wrap(err, "build TTL expression")
+	}
+	s := fmt.Sprintf("ALTER TABLE %s%s MODIFY TTL %s",
 		genNameWithMode(isCluster, tableInfo.Database.Name, tableInfo.Name),
 		genSQLClusterInfo(isCluster, tableInfo.Database.Cluster),
-		params.MergeTreeTTL)
+		ttlExpr)
 	_, err = c.db.Exec(s)
 	if err != nil {
 		elog.Error("UpdateMergeTreeTable", elog.Any("sql", s), elog.Any("err", err.Error()))

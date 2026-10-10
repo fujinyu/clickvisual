@@ -186,6 +186,7 @@ const DataLogsModel = () => {
     doCreatedLocalLogLibrary,
     doCreatedLocalLogLibraryBatch,
     doGetMappingJson,
+    doGetStoragePolicies,
   } = useLogLibrary();
 
   const {
@@ -944,6 +945,7 @@ const DataLogsModel = () => {
     doCreatedLocalLogLibrary,
     doCreatedLocalLogLibraryBatch,
     doGetMappingJson,
+    doGetStoragePolicies,
     doGetAnalysisField,
     doUpdateLinkLinkLogLibrary,
     doGetLinkLogLibraryList,

@@ -9,6 +9,7 @@ import (
 	"github.com/clickvisual/clickvisual/api/core/common"
 	"github.com/clickvisual/clickvisual/api/core/i"
 	"github.com/clickvisual/clickvisual/api/internal/pkg/constx"
+	"github.com/clickvisual/clickvisual/api/internal/pkg/utils"
 )
 
 var _ i.Storer = (*Storer)(nil)
@@ -24,22 +25,32 @@ type Storer struct {
 
 	conn *sql.DB // clickhouse instance
 
-	fields           string
-	ttl              int  // ttl Data expiration time, unit is the day
-	withAttachFields bool // withAttachFields Whether to include attachment fields, such as _key/headers
+	fields          string
+	ttl             int    // ttl Data expiration time, unit is the day
+	storagePolicy   string // ClickHouse storage_policy name, empty means disabled
+	coldVolume      string // TTL "TO VOLUME" target name, empty means disabled
+	hotDays         int    // days before moving data to cold volume; 0 or >=ttl means single-layer
+	withAttachFields bool  // withAttachFields Whether to include attachment fields, such as _key/headers
+
+	// Pre-rendered SQL fragments, filled in Create() to fail fast on invalid combos.
+	ttlClause      string
+	settingsClause string
 }
 
 func NewStorer(req i.StorerParams) *Storer {
 	return &Storer{
-		createType: req.CreateType,
-		isShard:    req.IsShard,
-		isReplica:  req.IsReplica,
-		cluster:    req.Cluster,
-		database:   req.Database,
-		table:      req.Table,
-		ttl:        req.TTL,
-		conn:       req.Conn,
-		fields:     req.Fields,
+		createType:    req.CreateType,
+		isShard:       req.IsShard,
+		isReplica:     req.IsReplica,
+		cluster:       req.Cluster,
+		database:      req.Database,
+		table:         req.Table,
+		ttl:           req.TTL,
+		conn:          req.Conn,
+		fields:        req.Fields,
+		storagePolicy: req.StoragePolicy,
+		coldVolume:    req.ColdVolume,
+		hotDays:       req.HotDays,
 	}
 }
 
@@ -54,6 +65,14 @@ func (ch *Storer) Create() (names []string, sqls []string, err error) {
 	case constx.TableCreateTypeJSONEachRow:
 		// todo nothing, wait for implementation
 	case constx.TableCreateTypeJSONAsString:
+		// Pre-render TTL / SETTINGS so that invalid hot/total/policy combos fail
+		// before any DDL hits ClickHouse.
+		if ch.ttlClause, err = utils.BuildTTLClause("_time_second_", ch.coldVolume, ch.hotDays, ch.ttl); err != nil {
+			return names, sqls, errors.Wrap(err, "build TTL clause")
+		}
+		if ch.settingsClause, err = utils.BuildSettingsClause(ch.storagePolicy); err != nil {
+			return names, sqls, errors.Wrap(err, "build SETTINGS clause")
+		}
 		// 创建数据落地表，包括分布式表和存储表
 		names, sqls = ch.createJSONAsString()
 		// 创建 cv 分析字段映射
@@ -101,9 +120,9 @@ func (ch *Storer) mergeTreeTable() (name string, sql string) {
 %s
 PARTITION BY toYYYYMMDD(_time_second_)
 ORDER BY _time_second_
-TTL toDateTime(_time_second_) + INTERVAL %d DAY
-SETTINGS index_granularity = 8192;
-`, tableNameWithCluster, ch.fields, "`_headers_name`", "`_headers_value`", engine, ch.ttl)
+%s
+%s;
+`, tableNameWithCluster, ch.fields, "`_headers_name`", "`_headers_value`", engine, ch.ttlClause, ch.settingsClause)
 	}
 	return tableName, fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s
 (
@@ -116,9 +135,9 @@ SETTINGS index_granularity = 8192;
 %s
 PARTITION BY toYYYYMMDD(_time_second_)
 ORDER BY _time_second_
-TTL toDateTime(_time_second_) + INTERVAL %d DAY
-SETTINGS index_granularity = 8192;
-`, tableNameWithCluster, ch.fields, engine, ch.ttl)
+%s
+%s;
+`, tableNameWithCluster, ch.fields, engine, ch.ttlClause, ch.settingsClause)
 }
 
 func (ch *Storer) distributedTable() (name string, sql string) {

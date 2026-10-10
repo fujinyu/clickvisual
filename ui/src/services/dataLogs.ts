@@ -69,6 +69,10 @@ export interface CreatedLogLibraryRequestAsString {
   timeField?: string;
   isKafkaTimestamp: number; // 1 yes 0 no
   v3TableType: number; // 0 default 1 jaegerJson
+  // ClickHouse hot/cold tiering; all optional so legacy single-layer flow is unchanged.
+  storagePolicy?: string; // empty means use server default storage policy
+  coldVolume?: string; // empty means single-layer (no TTL TO VOLUME clause)
+  hotDays?: number; // 0 or >=days means single-layer
 }
 
 export interface CreatedTableTemplateType {
@@ -147,6 +151,10 @@ export interface TableInfoResponse {
   desc: string;
   database: DatabaseResponse;
   traceTableId: number;
+  // ClickHouse hot/cold tiering; empty / zero means the table is single-layer.
+  storagePolicy?: string;
+  coldVolume?: string;
+  hotDays?: number;
 }
 
 export interface TableSqlContent {
@@ -245,6 +253,21 @@ export interface UpdateTableInfoType {
   kafkaSkipBrokenMessages?: string;
   kafkaTopic?: string;
   mergeTreeTTL?: number;
+  // hotDays is the only tiering field users may change after creation.
+  // storagePolicy / coldVolume are locked once the table exists.
+  hotDays?: number;
+}
+
+// ClickHouse storage policy read from system.storage_policies.
+export interface StoragePolicyVolume {
+  name: string;
+  index: number;
+  disks: string[];
+}
+
+export interface StoragePolicyResponse {
+  policyName: string;
+  volumes: StoragePolicyVolume[];
 }
 
 export interface LogFilterType {
@@ -500,6 +523,17 @@ export default {
       method: "PATCH",
       data,
     });
+  },
+
+  // List ClickHouse storage policies of an instance (hot/cold tiering options).
+  // Non-ClickHouse data sources return an error and the UI hides the pickers.
+  async getStoragePolicies(iid: number) {
+    return request<API.Res<StoragePolicyResponse[]>>(
+      process.env.PUBLIC_PATH + `api/v2/instances/${iid}/storage-policies`,
+      {
+        method: "GET",
+      }
+    );
   },
 
   // Obtain the table id from the third-party channel

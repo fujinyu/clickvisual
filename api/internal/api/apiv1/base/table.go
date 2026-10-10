@@ -162,6 +162,11 @@ func TableInfo(c *core.Context) {
 		TraceTableId: tableInfo.TraceTableId,
 		V3TableType:  tableInfo.V3TableType,
 		RawLogField:  tableInfo.RawLogField,
+		// ClickHouse hot/cold tiering: expose current values so EditLogLibraryModal
+		// can decide whether the "hot days" field is editable.
+		StoragePolicy: tableInfo.StoragePolicy,
+		ColdVolume:    tableInfo.ColdVolume,
+		HotDays:       tableInfo.HotDays,
 	}
 	if res.TimeField == "" {
 		res.TimeField = db.TimeFieldSecond

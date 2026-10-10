@@ -247,6 +247,11 @@ type RespTableDetail struct {
 	TraceTableId int `json:"traceTableId"`
 	V3TableType  int `json:"v3TableType"`
 
+	// ClickHouse hot/cold tiering (empty / zero means the table is single-layer).
+	StoragePolicy string `json:"storagePolicy"`
+	ColdVolume    string `json:"coldVolume"`
+	HotDays       int    `json:"hotDays"`
+
 	IsNotSupAnalysisField int `json:"isNotSupAnalysisField"`
 }
 

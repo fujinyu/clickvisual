@@ -314,6 +314,12 @@ func (l Local) ListColumn(s string, s2 string, b bool) ([]*view.RespColumn, erro
 	return res, nil
 }
 
+// ListStoragePolicies is unsupported on the local file source; hot/cold tiering
+// is a ClickHouse-only concept.
+func (l Local) ListStoragePolicies() ([]*view.RespStoragePolicy, error) {
+	return nil, fmt.Errorf("storage policies are only supported on ClickHouse instances")
+}
+
 func (l Local) DeleteDatabase(s string, s2 string) error {
 	// TODO implement me
 	panic("implement me")

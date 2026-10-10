@@ -104,6 +104,11 @@ export default function useLogLibrary() {
     loadingText: false,
   });
 
+  // Read ClickHouse storage policies for hot/cold tiering pickers.
+  const doGetStoragePolicies = useRequest(api.getStoragePolicies, {
+    loadingText: false,
+  });
+
   return {
     logLibraryCreatedModalVisible: createdVisible,
     logLibraryInfoDrawVisible: infoVisible,
@@ -138,5 +143,6 @@ export default function useLogLibrary() {
     getTableColumns,
     doCreatedLocalLogLibrary,
     doCreatedLocalLogLibraryBatch,
+    doGetStoragePolicies,
   };
 }

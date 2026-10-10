@@ -80,6 +80,17 @@ func Create(c *core.Context) {
 	if param.CreateType == 0 {
 		param.CreateType = constx.TableCreateTypeJSONEachRow
 	}
+	// Basic hot/cold tiering sanity checks. Deeper "does this policy actually
+	// exist on the target ClickHouse instance" validation is done in
+	// service.StorageCreate once the storage-policies lookup is available.
+	if param.HotDays < 0 {
+		c.JSONE(core.CodeErr, "hotDays must not be negative", nil)
+		return
+	}
+	if (param.StoragePolicy == "") != (param.ColdVolume == "") {
+		c.JSONE(core.CodeErr, "storagePolicy and coldVolume must be set together (or both empty)", nil)
+		return
+	}
 	_, err = service.StorageCreate(c.Uid(), databaseInfo, param)
 	if err != nil {
 		c.JSONE(core.CodeErr, err.Error(), err)
@@ -245,8 +256,19 @@ func Update(c *core.Context) {
 		c.JSONE(1, "update failed 01: "+err.Error(), nil)
 		return
 	}
+	// Hot/cold tiering: users may only tune the two day counts. Cold volume and
+	// storage_policy are frozen at create time per the product contract, so we
+	// only validate HotDays against the currently stored cold-volume state.
+	if tableInfo.ColdVolume != "" && req.HotDays < 0 {
+		c.JSONE(core.CodeErr, "hotDays must not be negative", nil)
+		return
+	}
+	if tableInfo.ColdVolume != "" && req.HotDays > req.MergeTreeTTL {
+		c.JSONE(core.CodeErr, "hotDays must not be greater than mergeTreeTTL", nil)
+		return
+	}
 	// check merge tree
-	if req.MergeTreeTTL != tableInfo.Days {
+	if req.MergeTreeTTL != tableInfo.Days || req.HotDays != tableInfo.HotDays {
 		// alert merge tree engine table
 		if err = op.UpdateMergeTreeTable(&tableInfo, req); err != nil {
 			c.JSONE(1, "update failed 02: "+err.Error(), nil)
@@ -270,6 +292,7 @@ func Update(c *core.Context) {
 	ups := make(map[string]interface{}, 0)
 	ups["uid"] = c.Uid()
 	ups["days"] = req.MergeTreeTTL
+	ups["hot_days"] = req.HotDays
 	ups["topic"] = req.KafkaTopic
 	ups["brokers"] = req.KafkaBrokers
 	ups["consumer_num"] = req.KafkaConsumerNum

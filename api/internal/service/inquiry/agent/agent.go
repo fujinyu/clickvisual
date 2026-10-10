@@ -398,6 +398,12 @@ func (a *Agent) ListColumn(s string, s2 string, b bool) ([]*view.RespColumn, err
 	panic("implement me")
 }
 
+// ListStoragePolicies is unsupported on the agent source; hot/cold tiering
+// is a ClickHouse-only concept.
+func (a *Agent) ListStoragePolicies() ([]*view.RespStoragePolicy, error) {
+	return nil, errors.New("storage policies are only supported on ClickHouse instances")
+}
+
 func (a *Agent) DeleteDatabase(s string, s2 string) error {
 	// TODO implement me
 	panic("implement me")

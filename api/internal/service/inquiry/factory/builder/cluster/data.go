@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/clickvisual/clickvisual/api/internal/pkg/utils"
 	"github.com/clickvisual/clickvisual/api/internal/service/inquiry/factory/builder/bumo"
 	"github.com/clickvisual/clickvisual/api/internal/service/inquiry/factory/builder/common"
 )
@@ -82,7 +83,14 @@ func (b *DataBuilder) BuilderTTL() {
 	switch b.QueryAssembly.Params.Data.DataType {
 	case bumo.DataTypeDistributed:
 	default:
-		b.QueryAssembly.Result += fmt.Sprintf("TTL toDateTime(_time_second_) + INTERVAL %d DAY\n", b.QueryAssembly.Params.Data.Days)
+		params := b.QueryAssembly.Params.Data
+		ttl, err := utils.BuildTTLClause("_time_second_", params.ColdVolume, params.HotDays, params.Days)
+		if err != nil {
+			// Fall back to the historical single-layer form so existing callers
+			// that never opt into hot/cold keep producing identical SQL.
+			ttl = fmt.Sprintf("TTL toDateTime(_time_second_) + INTERVAL %d DAY", params.Days)
+		}
+		b.QueryAssembly.Result += ttl + "\n"
 	}
 }
 
@@ -90,7 +98,11 @@ func (b *DataBuilder) BuilderSetting() {
 	switch b.QueryAssembly.Params.Data.DataType {
 	case bumo.DataTypeDistributed:
 	default:
-		b.QueryAssembly.Result += "SETTINGS index_granularity = 8192\n\n"
+		s, err := utils.BuildSettingsClause(b.QueryAssembly.Params.Data.StoragePolicy)
+		if err != nil {
+			s = "SETTINGS index_granularity = 8192"
+		}
+		b.QueryAssembly.Result += s + "\n\n"
 	}
 }
 

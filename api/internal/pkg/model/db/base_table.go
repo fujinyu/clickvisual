@@ -40,6 +40,11 @@ type BaseTable struct {
 	RawLogField             string `gorm:"column:raw_log_field;type:varchar(255)" json:"rawLogField"`
 	KafkaSkipBrokenMessages int    `gorm:"column:kafka_skip_broken_messages;type:int(11)" json:"kafkaSkipBrokenMessages"`
 
+	// ClickHouse hot/cold tiering (all zero/empty values keep the legacy single-layer behavior)
+	StoragePolicy string `gorm:"column:storage_policy;type:varchar(64);NOT NULL;default:''" json:"storagePolicy"` // storage_policy name, empty means disabled
+	ColdVolume    string `gorm:"column:cold_volume;type:varchar(64);NOT NULL;default:''" json:"coldVolume"`       // TTL TO VOLUME target, empty means disabled
+	HotDays       int    `gorm:"column:hot_days;type:int(11);default:0" json:"hotDays"`                            // days on hot volume before moving to cold
+
 	// Deprecated: use CreateType instead
 	IsKafkaTimestamp int `gorm:"column:is_kafka_timestamp;type:tinyint(1)" json:"isKafkaTimestamp"`
 	// Deprecated: use CreateType instead

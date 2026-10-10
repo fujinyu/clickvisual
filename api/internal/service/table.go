@@ -104,6 +104,9 @@ func StorageCreate(uid int, databaseInfo db.BaseDatabase, param view.ReqStorageC
 		SelectFields:            param.SelectFields(),
 		AnyJSON:                 param.JSON(),
 		KafkaSkipBrokenMessages: param.KafkaSkipBrokenMessages,
+		StoragePolicy:           param.StoragePolicy,
+		ColdVolume:              param.ColdVolume,
+		HotDays:                 param.HotDays,
 	}
 	tx := invoker.Db.Begin()
 	err = db.TableCreate(tx, &tableInfo)

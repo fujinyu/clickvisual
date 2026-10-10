@@ -142,6 +142,7 @@ func v2Full(r *gin.RouterGroup) {
 		r.PATCH("/storage/:storage-id/trace", core.Handle(storage.UpdateTraceInfo))
 		r.GET("/storage/:storage-id/trace-graph", core.Handle(storage.GetTraceGraph))
 		r.GET("/storage/:storage-id/columns", core.Handle(storage.GetStorageColumns))
+		r.GET("/instances/:iid/storage-policies", core.Handle(storage.StoragePolicies))
 		// collect
 		r.GET("/storage/collects", core.Handle(storage.ListCollect))
 		r.POST("/storage/collects", core.Handle(storage.CreateCollect))

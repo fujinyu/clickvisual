@@ -56,6 +56,11 @@ type Operator interface {
 	ListSystemCluster() ([]*view.SystemClusters, map[string]*view.SystemClusters, error)
 	ListDatabase() ([]*view.RespDatabaseSelfBuilt, error)
 	ListColumn(string, string, bool) ([]*view.RespColumn, error)
+	// ListStoragePolicies returns the ClickHouse storage policies available on
+	// the target instance (read from system.storage_policies). Data sources
+	// without tiered-storage support return an error so the UI can hide the
+	// dropdown instead of silently showing nothing.
+	ListStoragePolicies() ([]*view.RespStoragePolicy, error)
 
 	DeleteDatabase(string, string) error
 	DeleteAlertView(string, string) error

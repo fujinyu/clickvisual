@@ -29,6 +29,11 @@ type ParamsData struct {
 	TableName   string
 	Days        int
 	SourceTable string
+
+	// hot/cold tiering (ClickHouse only, all zero/empty values keep the legacy behavior)
+	StoragePolicy string
+	ColdVolume    string
+	HotDays       int
 }
 
 type ParamsStream struct {
