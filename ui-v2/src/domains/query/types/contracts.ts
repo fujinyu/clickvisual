@@ -69,6 +69,7 @@ export interface QueryLogsParams {
   query?: string;
   page?: number;
   pageSize?: number;
+  by?: "asc" | "desc";
 }
 
 export interface QueryHistogramBucket {

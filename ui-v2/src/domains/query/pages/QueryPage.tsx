@@ -244,6 +244,7 @@ const GLOBAL_MATCH_COLUMN = "_raw_log_";
 const GLOBAL_MATCH_DISPLAY_LABEL = GLOBAL_MATCH_COLUMN;
 const QUERY_PAGE_SIZE_OPTIONS = [50, 100, 200] as const;
 const DOWNLOAD_LOG_ROW_LIMIT = 10000;
+const LOG_CONTEXT_WINDOW_SECONDS = 5 * 60;
 const RESULT_TABLE_TOGGLE_COLUMN_WIDTH = 34;
 const QUERY_OVERSCROLL_GUARD_CLASS = "cv-query-overscroll-guard";
 const QUERY_HORIZONTAL_WHEEL_THRESHOLD = 4;
@@ -3410,6 +3411,7 @@ export default function QueryPage({ shareMode = false }: { shareMode?: boolean }
   } | null>(null);
   const [expandedLogIndexes, setExpandedLogIndexes] = useState<Set<number>>(() => new Set());
   const [expandedLogDisplayMode, setExpandedLogDisplayMode] = useState<"fields" | "json">("fields");
+  const [rawLogOnly, setRawLogOnly] = useState(false);
   const [expandedLogNestedKeys, setExpandedLogNestedKeys] = useState<Set<string>>(() => new Set());
   const [expandedLogMetadataIndexes, setExpandedLogMetadataIndexes] = useState<Set<number>>(() => new Set());
   const [logDetailMenu, setLogDetailMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
@@ -4492,6 +4494,24 @@ export default function QueryPage({ shareMode = false }: { shareMode?: boolean }
     setFeedbackMessage(copied ? "Log copied" : "Copy log failed");
   }
 
+  function openLogContextLink(row: NormalizedLogRow) {
+    const timeMs = getLogRowTimeMs(row);
+    const tableId = workspace.selectedTableId;
+    if (!timeMs || !tableId) {
+      setFeedbackMessage("Cannot locate a log without a valid time and table");
+      return;
+    }
+    const startSecond = Math.floor(timeMs / 1000);
+    const params = new URLSearchParams();
+    params.set("tid", String(tableId));
+    params.set("start", String(startSecond));
+    params.set("end", String(startSecond + LOG_CONTEXT_WINDOW_SECONDS));
+    params.set("page", "1");
+    params.set("size", "100");
+    params.set("by", "asc");
+    window.open(buildV2RouteHref("query", params), "_blank");
+  }
+
   async function downloadCurrentLogs() {
     if (downloadLogsLoading) {
       return;
@@ -4783,6 +4803,22 @@ export default function QueryPage({ shareMode = false }: { shareMode?: boolean }
     }
     workspace.setPageSize(nextPageSize);
     void workspace.runQuery(1, timeRange ? toSecondRange(timeRange) : undefined, undefined, undefined, nextPageSize);
+  }
+
+  function toggleResultOrder() {
+    if (workspace.loading) {
+      return;
+    }
+    const nextOrderDescending = !workspace.orderDescending;
+    workspace.setOrderDescending(nextOrderDescending);
+    void workspace.runQuery(
+      workspace.page,
+      timeRange ? toSecondRange(timeRange) : undefined,
+      undefined,
+      undefined,
+      undefined,
+      nextOrderDescending
+    );
   }
 
   function goToResultPage(nextPage: number) {
@@ -6964,6 +7000,46 @@ export default function QueryPage({ shareMode = false }: { shareMode?: boolean }
       </span>
     </button>
   ) : null;
+  const resultRawLogControl = currentResultBatchCount > 0 ? (
+    <button
+      type="button"
+      className={
+        rawLogOnly
+          ? "cv-query-expand-switch cv-query-expand-switch--on"
+          : "cv-query-expand-switch"
+      }
+      onClick={() => setRawLogOnly((value) => !value)}
+      aria-label="Raw log only"
+      aria-pressed={rawLogOnly}
+      title="Raw log only"
+    >
+      <span className="cv-query-expand-switch__track" aria-hidden="true">
+        <span className="cv-query-expand-switch__thumb" />
+      </span>
+      <span className="cv-query-expand-switch__label">{rawLogOnly ? "Raw" : "All"}</span>
+    </button>
+  ) : null;
+  const resultTimeOrderControl = currentResultBatchCount > 0 ? (
+    <button
+      type="button"
+      className={
+        workspace.orderDescending
+          ? "cv-query-expand-switch cv-query-expand-switch--on"
+          : "cv-query-expand-switch"
+      }
+      onClick={toggleResultOrder}
+      aria-label={workspace.orderDescending ? "Time order descending" : "Time order ascending"}
+      aria-pressed={workspace.orderDescending}
+      title={workspace.orderDescending ? "Time order descending" : "Time order ascending"}
+    >
+      <span className="cv-query-expand-switch__track" aria-hidden="true">
+        <span className="cv-query-expand-switch__thumb" />
+      </span>
+      <span className="cv-query-expand-switch__label">
+        {workspace.orderDescending ? "Desc" : "Asc"}
+      </span>
+    </button>
+  ) : null;
   const resultLoadingControl = workspace.loading ? (
     <span className="cv-query-result-bar__loading">
       <span className="cv-query-result-bar__loading-status" role="status" aria-live="polite">
@@ -8315,7 +8391,10 @@ export default function QueryPage({ shareMode = false }: { shareMode?: boolean }
                             {resultToolbarPagerControls}
                           </div>
                         ) : null}
-                        <div className="cv-query-result-actions__group cv-query-result-actions__group--view" />
+                        <div className="cv-query-result-actions__group cv-query-result-actions__group--view">
+                          {resultRawLogControl}
+                          {resultTimeOrderControl}
+                        </div>
                       </div>
                     </div>
               {allCurrentBatchLogsExpanded ? null : (
@@ -8343,6 +8422,9 @@ export default function QueryPage({ shareMode = false }: { shareMode?: boolean }
                     const detailMessageEntry = getLogDetailMessageEntry(row);
                     const detailMessageText = getLogDetailMessageText(row);
                     const visibleLogDetailEntries = getVisibleLogDetailEntries(row);
+                    const rawLogDetailEntries = visibleLogDetailEntries.filter(([key]) =>
+                      RAW_LOG_DETAIL_KEYS.includes(key)
+                    );
                     const primaryLogDetailEntries = visibleLogDetailEntries
                       .filter(
                         ([key, value]) =>
@@ -8491,6 +8573,18 @@ export default function QueryPage({ shareMode = false }: { shareMode?: boolean }
                                       <EuiIcon type="copyClipboard" size="s" aria-hidden="true" />
                                       <span>Copy log</span>
                                     </button>
+                                    <button
+                                      type="button"
+                                      className="cv-query-detail__action"
+                                      title="Locate log in time context"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        openLogContextLink(row);
+                                      }}
+                                    >
+                                      <EuiIcon type="arrowRight" size="s" aria-hidden="true" />
+                                      <span>Locate</span>
+                                    </button>
                                   </div>
                                 </div>
                                 {expandedLogDisplayMode === "json" ? (
@@ -8499,14 +8593,18 @@ export default function QueryPage({ shareMode = false }: { shareMode?: boolean }
                                   </pre>
                                 ) : (
                                   <div className="cv-query-detail__body">
-                                    <div className="cv-query-detail__focus">
-                                      <div className="cv-query-detail__message">
-                                        {renderLogDetailFieldCell(row, detailMessageEntry.key, detailMessageEntry.value)}
-                                        {renderLogDetailValueCell(row, detailMessageEntry.key, detailMessageEntry.value)}
+                                    {rawLogOnly ? null : (
+                                      <div className="cv-query-detail__focus">
+                                        <div className="cv-query-detail__message">
+                                          {renderLogDetailFieldCell(row, detailMessageEntry.key, detailMessageEntry.value)}
+                                          {renderLogDetailValueCell(row, detailMessageEntry.key, detailMessageEntry.value)}
+                                        </div>
                                       </div>
-                                    </div>
+                                    )}
                                     <div className="cv-query-detail__fields">
-                                      {primaryLogDetailEntries.map(renderLogDetailEntryRows)}
+                                      {(rawLogOnly ? rawLogDetailEntries : primaryLogDetailEntries).map(
+                                        renderLogDetailEntryRows
+                                      )}
                                     </div>
                                   </div>
                                 )}

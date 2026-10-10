@@ -316,6 +316,13 @@ function readInitialQueryConditions() {
   ] as QueryFilterCondition[];
 }
 
+function readInitialOrderDescending() {
+  if (typeof window === "undefined") {
+    return true;
+  }
+  return new URLSearchParams(window.location.search).get("by") !== "asc";
+}
+
 function writeQueryToURL(query: string) {
   if (typeof window === "undefined") {
     return;
@@ -581,6 +588,7 @@ export function useQueryWorkspace(
   const [pageSize, setPageSize] = useState(
     options?.initialPageSize && options.initialPageSize > 0 ? options.initialPageSize : DEFAULT_PAGE_SIZE
   );
+  const [orderDescending, setOrderDescending] = useState(() => readInitialOrderDescending());
   const [logs, setLogs] = useState<QueryLogsResponse | null>(null);
   const [charts, setCharts] = useState<QueryHistogramBucket[]>([]);
   const [lastRunSnapshot, setLastRunSnapshot] = useState<QueryRunSnapshot | null>(null);
@@ -903,7 +911,8 @@ export function useQueryWorkspace(
     overrideRange?: { st: number; et: number },
     overrideConditions?: QueryFilterCondition[],
     overrideQueryText?: string,
-    overridePageSize?: number
+    overridePageSize?: number,
+    overrideOrderDescending?: boolean
   ) {
     cancelQuery();
     const effectiveTableId = selectedTableId ?? selectedTableEntry?.id ?? null;
@@ -944,12 +953,14 @@ export function useQueryWorkspace(
       overridePageSize && Number.isFinite(overridePageSize) && overridePageSize > 0
         ? Math.round(overridePageSize)
         : pageSize;
+    const effectiveOrderDescending = overrideOrderDescending ?? orderDescending;
 
     const params = {
       ...timeParams,
       query: legacyV1ShareQuery || requestQuery,
       page: nextPage,
-      pageSize: effectivePageSize
+      pageSize: effectivePageSize,
+      by: effectiveOrderDescending ? ("desc" as const) : ("asc" as const)
     };
     const abortController = new AbortController();
     queryAbortControllerRef.current = abortController;
@@ -969,7 +980,7 @@ export function useQueryWorkspace(
           page: nextPage,
           pageSize: effectivePageSize,
           conditions: structuredConditions,
-          sorts: [],
+          sorts: [{ fieldKey: "_time_second_", descending: effectiveOrderDescending }],
           displayFields: []
         },
         requestOptions
@@ -1214,6 +1225,7 @@ export function useQueryWorkspace(
     savedFilterLoading,
     page,
     pageSize,
+    orderDescending,
     logs,
     charts,
     lastRunSnapshot,
@@ -1260,6 +1272,7 @@ export function useQueryWorkspace(
     setQueryText,
     setConditions,
     setPageSize,
+    setOrderDescending,
     setActiveConditionId,
     addCondition: () => {
       const next = createEmptyCondition();

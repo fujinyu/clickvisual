@@ -852,6 +852,215 @@ describe("query page", () => {
     expect(runRequest).toContain('"value":"aud"');
   });
 
+  it("shows only the raw log field in expanded details when raw log only is toggled on", async () => {
+    const defaultFetch = window.fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const rawUrl = typeof input === "string" ? input : input.toString();
+        const url = new URL(rawUrl, "http://localhost");
+        const method = init?.method || "GET";
+
+        if (method === "GET" && url.pathname.endsWith("/api/v1/tables/9527/logs")) {
+          return {
+            ok: true,
+            text: async () =>
+              JSON.stringify({
+                code: 0,
+                msg: "succ",
+                data: {
+                  count: 1,
+                  cost: 1,
+                  query: "",
+                  keys: [
+                    { field: "_time", alias: "时间" },
+                    { field: "_raw_log_", alias: "_raw_log_" },
+                    { field: "level", alias: "级别" },
+                    { field: "message", alias: "message" },
+                    { field: "trace_id", alias: "Trace ID" }
+                  ],
+                  logs: [
+                    {
+                      _time: "2026-04-15 10:30:00",
+                      _raw_log_: "RAWONLYMARKER level=ERROR msg=timeout",
+                      level: "ERROR",
+                      message: "timeout",
+                      trace_id: "trace-9527"
+                    }
+                  ]
+                }
+              })
+          };
+        }
+
+        return defaultFetch(input, init);
+      })
+    );
+
+    render(
+      <TimeRangeProvider>
+        <QueryPage />
+      </TimeRangeProvider>
+    );
+
+    await waitForQueryPageReady();
+    const detail = (await screen.findAllByLabelText("Log details"))[0];
+
+    expect(within(detail).getByText("trace_id")).toBeInTheDocument();
+    expect(within(detail).queryByText(/RAWONLYMARKER/)).not.toBeInTheDocument();
+
+    const toggle = screen.getByRole("button", { name: "Raw log only" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "Raw log only" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+
+    await waitFor(() => {
+      const current = screen.getAllByLabelText("Log details")[0];
+      expect(within(current).queryByText("trace_id")).not.toBeInTheDocument();
+    });
+    const currentDetail = screen.getAllByLabelText("Log details")[0];
+    expect(within(currentDetail).getByText(/RAWONLYMARKER/)).toBeInTheDocument();
+  });
+
+  it("re-runs the log query with the selected time order", async () => {
+    const defaultFetch = window.fetch;
+    const logSearches: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const rawUrl = typeof input === "string" ? input : input.toString();
+        const url = new URL(rawUrl, "http://localhost");
+        const method = init?.method || "GET";
+        if (method === "GET" && url.pathname.endsWith("/api/v1/tables/9527/logs")) {
+          logSearches.push(url.search);
+        }
+        return defaultFetch(input, init);
+      })
+    );
+
+    render(
+      <TimeRangeProvider>
+        <QueryPage />
+      </TimeRangeProvider>
+    );
+
+    await waitForQueryPageReady();
+    await screen.findAllByLabelText("Log details");
+
+    expect(logSearches.some((search) => search.includes("by=desc"))).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Time order descending" }));
+
+    await waitFor(() => {
+      expect(logSearches.some((search) => search.includes("by=asc"))).toBe(true);
+    });
+    expect(screen.getByRole("button", { name: "Time order ascending" })).toBeInTheDocument();
+  });
+
+  it("sends the selected time order to the structured query run", async () => {
+    const defaultFetch = window.fetch;
+    const runBodies: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const rawUrl = typeof input === "string" ? input : input.toString();
+        const url = new URL(rawUrl, "http://localhost");
+        const method = init?.method || "GET";
+        if (method === "POST" && url.pathname.endsWith("/api/v2/query/run")) {
+          runBodies.push(String(init?.body || ""));
+        }
+        return defaultFetch(input, init);
+      })
+    );
+    window.history.replaceState(
+      {},
+      "",
+      "/v2/query/?start=1780538785&end=1780539685&tid=9527&kw=aud&queryType=rawLog&page=1&size=10"
+    );
+
+    render(
+      <TimeRangeProvider>
+        <QueryPage />
+      </TimeRangeProvider>
+    );
+
+    await waitForQueryPageReady();
+    await screen.findAllByLabelText("Log details");
+
+    expect(runBodies.length).toBeGreaterThan(0);
+    expect(runBodies[runBodies.length - 1]).toContain('"descending":true');
+
+    fireEvent.click(screen.getByRole("button", { name: "Time order descending" }));
+
+    await waitFor(() => {
+      expect(runBodies.some((body) => body.includes('"descending":false'))).toBe(true);
+    });
+  });
+
+  it("opens a locate link scoped to the log timestamp", async () => {
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+
+    render(
+      <TimeRangeProvider>
+        <QueryPage />
+      </TimeRangeProvider>
+    );
+
+    await waitForQueryPageReady();
+    await screen.findAllByLabelText("Log details");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Locate" })[0]);
+
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    const [href, target] = openSpy.mock.calls[0];
+    expect(target).toBe("_blank");
+    const url = new URL(String(href), "http://localhost");
+    expect(url.pathname).toContain("/v2/query");
+    expect(url.searchParams.get("tid")).toBe("9527");
+    expect(url.searchParams.get("by")).toBe("asc");
+    expect(url.searchParams.get("page")).toBe("1");
+    expect(url.searchParams.get("size")).toBe("100");
+    const start = Number(url.searchParams.get("start"));
+    const end = Number(url.searchParams.get("end"));
+    expect(Number.isInteger(start) && start > 0).toBe(true);
+    expect(end - start).toBe(300);
+
+    openSpy.mockRestore();
+  });
+
+  it("applies the by=asc url param to the initial log query order", async () => {
+    const defaultFetch = window.fetch;
+    const logSearches: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const rawUrl = typeof input === "string" ? input : input.toString();
+        const url = new URL(rawUrl, "http://localhost");
+        const method = init?.method || "GET";
+        if (method === "GET" && url.pathname.endsWith("/api/v1/tables/9527/logs")) {
+          logSearches.push(url.search);
+        }
+        return defaultFetch(input, init);
+      })
+    );
+    window.history.replaceState({}, "", "/v2/query/?tid=9527&by=asc");
+
+    render(
+      <TimeRangeProvider>
+        <QueryPage />
+      </TimeRangeProvider>
+    );
+
+    await waitForQueryPageReady();
+    await screen.findAllByLabelText("Log details");
+
+    expect(logSearches.length).toBeGreaterThan(0);
+    expect(logSearches[0]).toContain("by=asc");
+  });
+
   it("restores legacy v1 kw filter expressions as structured v2 conditions", async () => {
     const defaultFetch = window.fetch;
     const runPayloads: any[] = [];
