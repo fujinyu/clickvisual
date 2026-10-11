@@ -39,6 +39,10 @@ export interface CreateLogLibraryPayload {
   createType?: number;
   timeFieldParent?: string;
   rawLogFieldParent?: string;
+  // ClickHouse hot/cold tiering; empty / zero keeps the single-layer behavior.
+  storagePolicy?: string;
+  coldVolume?: string;
+  hotDays?: number;
 }
 
 export interface LogLibraryJSONField {
@@ -145,4 +149,83 @@ export function getTableDDL(iid: number, database: string, table: string) {
   return client.get<{ tables: LogLibraryPhysicalTable[] }>(
     `/api/v2/base/log-library-management/instances/${iid}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/ddl`,
   );
+}
+
+// ClickHouse storage policy read from system.storage_policies. Non-ClickHouse
+// instances return an error, so callers fall back to an empty list and hide the
+// tiering pickers.
+export interface StoragePolicyVolume {
+  name: string;
+  index: number;
+  disks: string[];
+}
+
+export interface StoragePolicyResponse {
+  policyName: string;
+  volumes: StoragePolicyVolume[];
+}
+
+export function listStoragePolicies(iid: number) {
+  return client.get<StoragePolicyResponse[]>(
+    `/api/v2/instances/${iid}/storage-policies`,
+  );
+}
+
+export interface LogLibraryDetail {
+  id: number;
+  name: string;
+  desc?: string;
+  days: number;
+  topic: string;
+  brokers: string;
+  consumerNum: number;
+  kafkaSkipBrokenMessages: number;
+  v3TableType: number;
+  storagePolicy?: string;
+  coldVolume?: string;
+  hotDays?: number;
+}
+
+export function getLogLibraryDetail(id: number) {
+  return client.get<LogLibraryDetail>(`/api/v1/tables/${id}`);
+}
+
+// Only mergeTreeTTL(days) and hotDays are tiering-related edits; storage_policy
+// and cold_volume stay frozen after creation. The remaining kafka fields must be
+// echoed back so the PATCH does not wipe them.
+export interface UpdateLogLibraryPayload {
+  mergeTreeTTL: number;
+  kafkaBrokers: string;
+  kafkaTopic: string;
+  kafkaConsumerNum: number;
+  kafkaSkipBrokenMessages: number;
+  desc: string;
+  v3TableType: number;
+  hotDays: number;
+}
+
+export function updateLogLibrary(id: number, payload: UpdateLogLibraryPayload) {
+  return client.patch<void>(`/api/v2/storage/${id}`, payload);
+}
+
+// iLogtail K8s template payload; mirrors the v1 "ilogtail_k8s" template.
+export interface ILogtailK8sPayload {
+  databaseId: number;
+  name: string;
+  brokers: string;
+  topic: string;
+  days: number;
+}
+
+export function createLogLibraryByILogtailK8s(payload: ILogtailK8sPayload) {
+  return client.post<void>(
+    "/api/v2/base/log-library-management/storage/ilogtail_k8s",
+    payload,
+  );
+}
+
+// Rebuild the collection chain: fix log_id/time_ns to Int64 and recreate the
+// materialized views. Mirrors v1 POST /api/v1/tables/{id}/rebuild.
+export function rebuildLogLibrary(id: number) {
+  return client.post<void>(`/api/v1/tables/${id}/rebuild`, undefined);
 }

@@ -12,6 +12,7 @@ import {
   type PermissionRole
 } from "../api/permission";
 import { EmptyState, ErrorState, LoadingState } from "../../../shared/state/PageState";
+import RoleUserGrantModal from "../components/RoleUserGrantModal";
 
 type FeedbackState =
   | { tone: "status" | "alert"; message: string }
@@ -63,6 +64,7 @@ export default function PermissionRolesPage() {
   const [resourceOptions, setResourceOptions] = useState<PrefixInfo[]>([]);
   const [commonInfo, setCommonInfo] = useState<PermissionCommonInfo | null>(null);
   const [roleModal, setRoleModal] = useState<RoleModalState | null>(null);
+  const [userGrantRole, setUserGrantRole] = useState<PermissionRole | null>(null);
 
   async function loadRoles(nextFilters?: {
     name?: string;
@@ -424,6 +426,14 @@ export default function PermissionRolesPage() {
                   <button
                     type="button"
                     className="cv-secondary-button"
+                    aria-label={`关联用户 ${role.name}`}
+                    onClick={() => setUserGrantRole(role)}
+                  >
+                    关联用户
+                  </button>
+                  <button
+                    type="button"
+                    className="cv-secondary-button"
                     aria-label={`删除角色 ${role.name}`}
                     onClick={() => void handleDeleteRole(role)}
                   >
@@ -607,6 +617,21 @@ export default function PermissionRolesPage() {
             </div>
           </section>
         </div>
+      ) : null}
+
+      {userGrantRole ? (
+        <RoleUserGrantModal
+          roleId={userGrantRole.id}
+          roleName={userGrantRole.name}
+          onClose={() => setUserGrantRole(null)}
+          onGranted={() => {
+            setFeedback({ tone: "status", message: "角色关联用户已更新" });
+            void loadRoles({
+              name: nameKeyword,
+              belongResource: resourceKeyword
+            });
+          }}
+        />
       ) : null}
     </PermissionCenterLayout>
   );

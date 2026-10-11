@@ -230,6 +230,17 @@ export function grantPermissionRootUids(payload: PermissionRootUsers) {
   return client.post<void>("/api/v1/pms/root/grant", payload);
 }
 
+export function getPermissionRoleUids(roleId: number) {
+  return client.get<PermissionRootUsers>(`/api/v1/pms/role/uids/${roleId}`);
+}
+
+export function grantPermissionRoleUids(
+  roleId: number,
+  payload: PermissionRootUsers
+) {
+  return client.post<void>(`/api/v1/pms/role/grant/${roleId}`, payload);
+}
+
 export function getPermissionInstanceGrant(instanceId: number) {
   return client.get<PermissionInstanceGrant>(
     `/api/v1/pms/instance/${instanceId}/role/grant`

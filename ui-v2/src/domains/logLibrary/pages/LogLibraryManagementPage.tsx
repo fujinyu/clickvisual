@@ -6,13 +6,18 @@ import {
   getTableColumns,
   getTableDDL,
   listLogLibraries,
+  listStoragePolicies,
   previewLogLibraryJSON,
+  rebuildLogLibrary,
   type LogLibraryJSONPreview,
   type LogLibraryPhysicalTable,
   type LogLibraryRow,
+  type StoragePolicyResponse,
 } from "../api/logLibrary";
 import { listQuerySourceInstances } from "../../query/api/query";
 import type { QuerySourceInstance } from "../../query/types/contracts";
+import { EditLogLibraryModal } from "../components/EditLogLibraryModal";
+import { TemplateILogtailK8sModal } from "../components/TemplateILogtailK8sModal";
 
 type Inspector = { kind: "columns" | "ddl"; row: LogLibraryRow } | null;
 
@@ -33,6 +38,8 @@ export default function LogLibraryManagementPage() {
   const [inspectorLoading, setInspectorLoading] = useState(false);
   const [inspectorError, setInspectorError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [editTableId, setEditTableId] = useState(0);
+  const [k8sOpen, setK8sOpen] = useState(false);
   const [createForm, setCreateForm] = useState({
     databaseId: 0,
     tableName: "",
@@ -45,7 +52,11 @@ export default function LogLibraryManagementPage() {
     topics: "",
     source: "",
     desc: "",
+    storagePolicy: "",
+    coldVolume: "",
+    hotDays: 0,
   });
+  const [policies, setPolicies] = useState<StoragePolicyResponse[]>([]);
   const [preview, setPreview] = useState<LogLibraryJSONPreview | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -81,6 +92,46 @@ export default function LogLibraryManagementPage() {
     const selected = instances.find((item) => item.id === instanceId);
     return selected?.databases ?? [];
   }, [instances, instanceId]);
+
+  // Resolve the instance id of the database picked in the create form so the
+  // tiering pickers can load that instance's ClickHouse storage policies.
+  const createIid = useMemo(() => {
+    for (const instance of instances) {
+      const hit = instance.databases.find(
+        (database) => database.id === createForm.databaseId,
+      );
+      if (hit) return hit.iid;
+    }
+    return 0;
+  }, [instances, createForm.databaseId]);
+
+  const selectedPolicyVolumes = useMemo(() => {
+    const hit = policies.find(
+      (policy) => policy.policyName === createForm.storagePolicy,
+    );
+    return hit?.volumes ?? [];
+  }, [policies, createForm.storagePolicy]);
+
+  // Load storage policies for the selected instance; any error (e.g. a
+  // non-ClickHouse source) falls back to an empty list so the tiering section
+  // is hidden instead of blocking table creation.
+  useEffect(() => {
+    if (!createOpen || !createIid) {
+      setPolicies([]);
+      return;
+    }
+    let active = true;
+    listStoragePolicies(createIid)
+      .then((list) => {
+        if (active) setPolicies(Array.isArray(list) ? list : []);
+      })
+      .catch(() => {
+        if (active) setPolicies([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [createOpen, createIid]);
 
   const filteredRows = useMemo(() => {
     const query = keyword.trim().toLowerCase();
@@ -152,6 +203,17 @@ export default function LogLibraryManagementPage() {
       setError("请选择数据库、填写日志表名称，解析 JSON 后再创建");
       return;
     }
+    if (createForm.storagePolicy && !createForm.coldVolume) {
+      setError("启用冷热分层时请选择冷数据 Volume");
+      return;
+    }
+    if (
+      createForm.storagePolicy &&
+      (!createForm.hotDays || createForm.hotDays <= 0 || createForm.hotDays >= 7)
+    ) {
+      setError("热数据天数需为小于总保留天数(7)的正整数");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -169,6 +231,9 @@ export default function LogLibraryManagementPage() {
         rawLogFieldParent: createForm.rawLogFieldParent.trim(),
         source: createForm.source.trim(),
         createType: 6,
+        storagePolicy: createForm.storagePolicy || undefined,
+        coldVolume: createForm.coldVolume || undefined,
+        hotDays: createForm.hotDays || undefined,
       });
       setCreateOpen(false);
       setCreateForm({
@@ -183,6 +248,9 @@ export default function LogLibraryManagementPage() {
         topics: "",
         source: "",
         desc: "",
+        storagePolicy: "",
+        coldVolume: "",
+        hotDays: 0,
       });
       setPreview(null);
       await load();
@@ -268,6 +336,25 @@ export default function LogLibraryManagementPage() {
     }
   }
 
+  async function confirmRebuild(row: LogLibraryRow) {
+    if (
+      !window.confirm(
+        `确认重建 ${row.instanceName} / ${row.databaseName}.${row.tableName} 的采集结构？将修正 log_id/time_ns 为 Int64 并重建物化视图。`,
+      )
+    )
+      return;
+    try {
+      await rebuildLogLibrary(row.id);
+      await load();
+    } catch (rebuildError) {
+      setError(
+        rebuildError instanceof Error
+          ? rebuildError.message
+          : "采集结构重建失败",
+      );
+    }
+  }
+
   if (authorized === null || loading) {
     return (
       <section className="cv-page cv-log-library-page">
@@ -307,6 +394,13 @@ export default function LogLibraryManagementPage() {
             onClick={() => void load()}
           >
             刷新
+          </button>
+          <button
+            type="button"
+            className="cv-secondary-button"
+            onClick={() => setK8sOpen(true)}
+          >
+            iLogtail K8s 接入
           </button>
           <button
             type="button"
@@ -388,6 +482,13 @@ export default function LogLibraryManagementPage() {
                       <button
                         type="button"
                         className="cv-secondary-button"
+                        onClick={() => setEditTableId(row.id)}
+                      >
+                        编辑
+                      </button>
+                      <button
+                        type="button"
+                        className="cv-secondary-button"
                         onClick={() => void openInspector("columns", row)}
                       >
                         结构
@@ -398,6 +499,13 @@ export default function LogLibraryManagementPage() {
                         onClick={() => void openInspector("ddl", row)}
                       >
                         DDL
+                      </button>
+                      <button
+                        type="button"
+                        className="cv-secondary-button"
+                        onClick={() => void confirmRebuild(row)}
+                      >
+                        重建采集
                       </button>
                       <button
                         type="button"
@@ -824,6 +932,86 @@ export default function LogLibraryManagementPage() {
                   />
                 </label>
               </div>
+
+              {policies.length > 0 ? (
+                <div className="cv-log-library-create__grid">
+                  <label className="cv-log-library-field">
+                    <span className="cv-log-library-field__label">存储策略</span>
+                    <select
+                      className="cv-select cv-log-library-field__control"
+                      aria-label="存储策略"
+                      value={createForm.storagePolicy}
+                      onChange={(event) =>
+                        setCreateForm((current) => ({
+                          ...current,
+                          storagePolicy: event.target.value,
+                          coldVolume: "",
+                          hotDays: 0,
+                        }))
+                      }
+                    >
+                      <option value="">不启用冷热分层</option>
+                      {policies.map((policy) => (
+                        <option
+                          key={policy.policyName}
+                          value={policy.policyName}
+                        >
+                          {policy.policyName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {createForm.storagePolicy ? (
+                    <label className="cv-log-library-field">
+                      <span className="cv-log-library-field__label">
+                        冷数据 Volume
+                      </span>
+                      <select
+                        className="cv-select cv-log-library-field__control"
+                        aria-label="冷数据 Volume"
+                        value={createForm.coldVolume}
+                        onChange={(event) =>
+                          setCreateForm((current) => ({
+                            ...current,
+                            coldVolume: event.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">选择冷数据 Volume</option>
+                        {selectedPolicyVolumes.map((volume) => (
+                          <option
+                            key={`${createForm.storagePolicy}-${volume.index}`}
+                            value={volume.name}
+                          >
+                            {volume.name} (index {volume.index})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                  {createForm.storagePolicy ? (
+                    <label className="cv-log-library-field">
+                      <span className="cv-log-library-field__label">
+                        热数据天数
+                      </span>
+                      <input
+                        className="cv-text-input cv-log-library-field__control"
+                        aria-label="热数据天数"
+                        type="number"
+                        min={1}
+                        value={createForm.hotDays || ""}
+                        onChange={(event) =>
+                          setCreateForm((current) => ({
+                            ...current,
+                            hotDays: Number(event.target.value),
+                          }))
+                        }
+                        placeholder="小于总保留天数(7)"
+                      />
+                    </label>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
             <div className="cv-log-library-create__footer">
@@ -845,6 +1033,22 @@ export default function LogLibraryManagementPage() {
             </div>
           </section>
         </div>
+      ) : null}
+      {editTableId ? (
+        <EditLogLibraryModal
+          open
+          tableId={editTableId}
+          onClose={() => setEditTableId(0)}
+          onSuccess={() => void load()}
+        />
+      ) : null}
+      {k8sOpen ? (
+        <TemplateILogtailK8sModal
+          open
+          instances={instances}
+          onClose={() => setK8sOpen(false)}
+          onSuccess={() => void load()}
+        />
       ) : null}
     </section>
   );

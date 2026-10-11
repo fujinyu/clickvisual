@@ -21,6 +21,12 @@ function setMultiSelectValue(trigger: HTMLElement, labels: string[]) {
 function createRoleFetchMock() {
   const postPayloads: Array<Record<string, unknown>> = [];
   const putPayloads: Array<Record<string, unknown>> = [];
+  const roleGrantPayloads: Array<{ roleId: string; body: Record<string, unknown> }> = [];
+  const users = [
+    { uid: 1, username: "alice", nickname: "Alice", email: "alice@example.com", phone: "", avatar: "" },
+    { uid: 2, username: "bob", nickname: "Bob", email: "bob@example.com", phone: "", avatar: "" }
+  ];
+  const roleUids: Record<string, number[]> = { "12": [1] };
   let roles = [
     {
       id: 11,
@@ -179,6 +185,50 @@ function createRoleFetchMock() {
       };
     }
 
+    if (method === "GET" && url.pathname.endsWith("/api/v2/base/users")) {
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            code: 0,
+            msg: "succ",
+            data: { total: users.length, list: users }
+          })
+      };
+    }
+
+    const roleUidsMatch = url.pathname.match(/\/api\/v1\/pms\/role\/uids\/(\d+)$/);
+    if (method === "GET" && roleUidsMatch) {
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            code: 0,
+            msg: "succ",
+            data: { root_uids: roleUids[roleUidsMatch[1]] ?? [] }
+          })
+      };
+    }
+
+    const roleGrantMatch = url.pathname.match(/\/api\/v1\/pms\/role\/grant\/(\d+)$/);
+    if (method === "POST" && roleGrantMatch) {
+      const payload = JSON.parse(String(init?.body || "{}"));
+      roleGrantPayloads.push({ roleId: roleGrantMatch[1], body: payload });
+      roleUids[roleGrantMatch[1]] = payload.root_uids ?? [];
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            code: 0,
+            msg: "succ",
+            data: null
+          })
+      };
+    }
+
     return {
       ok: false,
       status: 500,
@@ -194,7 +244,8 @@ function createRoleFetchMock() {
   return {
     fetch,
     postPayloads,
-    putPayloads
+    putPayloads,
+    roleGrantPayloads
   };
 }
 
@@ -295,5 +346,35 @@ describe("permission roles page", () => {
     fireEvent.click(screen.getByRole("button", { name: "删除角色 instance_editor" }));
     expect(await screen.findByText("角色已删除")).toBeInTheDocument();
     expect(screen.queryByText("instance_editor")).not.toBeInTheDocument();
+  });
+
+  it("associates users with a role from the role list", async () => {
+    const mock = createRoleFetchMock();
+    vi.stubGlobal("fetch", mock.fetch);
+
+    render(
+      <MemoryRouter>
+        <PermissionRolesPage />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("instance_editor")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "关联用户 instance_editor" })
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "选择用户 Bob" })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "选择用户 Bob" }));
+    fireEvent.click(screen.getByRole("button", { name: "保存关联" }));
+
+    expect(await screen.findByText("角色关联用户已更新")).toBeInTheDocument();
+    expect(mock.roleGrantPayloads.at(-1)).toMatchObject({
+      roleId: "12",
+      body: { root_uids: [1, 2] }
+    });
   });
 });
