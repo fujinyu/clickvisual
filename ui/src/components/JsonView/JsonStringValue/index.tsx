@@ -2,7 +2,7 @@ import jsonViewStyles from "@/components/JsonView/index.less";
 import classNames from "classnames";
 import { LOGMAXTEXTLENGTH, LOGMAXTEXTLENGTHUnParse } from "@/config/config";
 import { Button, message, Popover } from "antd";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useIntl } from "umi";
 import ClickMenu from "@/pages/DataLogs/components/QueryResult/Content/RawLog/ClickMenu";
 import moment from "moment";
@@ -13,6 +13,8 @@ type JsonStringValueProps = {
   indexKey?: string;
   isIndex?: boolean;
   rowKeyItem?: string;
+  /** 默认展开正文（不换行模式），为真时长日志不再默认截断 */
+  defaultExpanded?: boolean;
 } & _CommonProps;
 export const REG_SEPARATORS = [
   " ",
@@ -65,12 +67,19 @@ const JsonStringValue = ({
   indexKey,
   isIndex,
   rowKeyItem,
+  defaultExpanded,
   ...restProps
 }: JsonStringValueProps) => {
   const { onClickValue, highLightValue, quickInsertLikeExclusion } = restProps;
   const strListByReg: string[] = splitRawLogString(val);
   const isExceed = (!!val && val.length > LOGMAXTEXTLENGTH) || false;
-  const [isHidden, setIsHidden] = useState<boolean>(isExceed);
+  const [isHidden, setIsHidden] = useState<boolean>(
+    defaultExpanded ? false : isExceed
+  );
+  // 切换不换行开关时，重置该条日志的展开/收起默认态
+  useEffect(() => {
+    setIsHidden(defaultExpanded ? false : isExceed);
+  }, [defaultExpanded]);
   const i18n = useIntl();
 
   const isValue = (value: any) => {

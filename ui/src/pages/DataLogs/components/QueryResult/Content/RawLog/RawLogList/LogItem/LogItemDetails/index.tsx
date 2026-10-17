@@ -11,12 +11,14 @@ interface LogItemDetailsProps {
   log: any;
   foldingChecked?: boolean;
   rawLogChecked?: boolean;
+  nowrapChecked?: boolean;
 }
 
 const LogItemDetails = ({
   log,
   foldingChecked,
   rawLogChecked,
+  nowrapChecked,
 }: LogItemDetailsProps) => {
   const {
     logs,
@@ -340,6 +342,7 @@ const LogItemDetails = ({
                 </div>
                 <LogContent
                   foldingChecked={foldingChecked}
+                  nowrapChecked={nowrapChecked}
                   isRawLog={isRawLog}
                   regSpeFlag={regSpeFlag}
                   content={content}

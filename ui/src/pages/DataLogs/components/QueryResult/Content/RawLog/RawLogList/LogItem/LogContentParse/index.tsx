@@ -18,6 +18,7 @@ type LogContentParseProps = {
     extra?: { key?: string; isIndex?: boolean; indexKey?: string }
   ) => void;
   foldingChecked?: boolean;
+  defaultExpanded?: boolean;
 };
 
 const LogContentParse = ({
@@ -28,6 +29,7 @@ const LogContentParse = ({
   quickInsertLikeQuery,
   quickInsertLikeExclusion,
   foldingChecked,
+  defaultExpanded,
 }: LogContentParseProps) => {
   const { highlightKeywords } = useModel("dataLogs");
   const isNullList = ["\n", "\r\n", "", " "];
@@ -42,6 +44,7 @@ const LogContentParse = ({
           val={logContent.toString()}
           keyItem={keyItem}
           rowKeyItem={rowKeyItem}
+          defaultExpanded={defaultExpanded}
           onClickValue={quickInsertLikeQuery}
           quickInsertLikeExclusion={quickInsertLikeExclusion}
           highLightValue={highlightKeywords}

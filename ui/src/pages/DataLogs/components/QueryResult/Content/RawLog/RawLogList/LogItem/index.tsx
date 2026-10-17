@@ -4,8 +4,8 @@ import LogItemDetails from "@/pages/DataLogs/components/QueryResult/Content/RawL
 import moment from "moment";
 import { useEffect, useMemo, useState } from "react";
 import LogItemFold from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogList/LogItem/LogItemFold";
-import { CaretDownOutlined, CaretRightOutlined } from "@ant-design/icons";
-import { Button } from "antd";
+import { CaretDownOutlined, CaretRightOutlined, EllipsisOutlined } from "@ant-design/icons";
+import { Button, Popover } from "antd";
 import classNames from "classnames";
 
 interface LogItemProps {
@@ -72,7 +72,15 @@ const LogItem = ({
         </div>
         <div className={logItemStyles.dateTime}>
           <div>{time}</div>
-          <LogItemOperation log={log} />
+          <Popover
+            trigger="click"
+            placement="bottomLeft"
+            content={<LogItemOperation log={log} />}
+          >
+            <span className={logItemStyles.moreTrigger}>
+              <EllipsisOutlined />
+            </span>
+          </Popover>
         </div>
       </div>
       <div className={logItemStyles.right}>
@@ -87,6 +95,7 @@ const LogItem = ({
             foldingChecked={foldingChecked}
             log={log}
             rawLogChecked={rawLogChecked}
+            nowrapChecked={nowrapChecked}
           />
         )}
       </div>

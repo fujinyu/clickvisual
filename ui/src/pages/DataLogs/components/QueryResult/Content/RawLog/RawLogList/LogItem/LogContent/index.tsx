@@ -18,6 +18,7 @@ interface LogContentProps {
   newLog: any;
   secondaryIndexList: any[];
   foldingChecked?: boolean;
+  nowrapChecked?: boolean;
 }
 const LogContent = (props: LogContentProps) => {
   const {
@@ -35,6 +36,7 @@ const LogContent = (props: LogContentProps) => {
     newLog,
     secondaryIndexList,
     foldingChecked,
+    nowrapChecked,
   } = props;
 
   // 二级索引
@@ -57,6 +59,7 @@ const LogContent = (props: LogContentProps) => {
         regSpeFlag ? (
           <LogContentParse
             foldingChecked={foldingChecked}
+            defaultExpanded={!!nowrapChecked}
             logContent={content}
             keyItem={keyItem}
             quickInsertLikeQuery={quickInsertLikeQuery}
@@ -65,6 +68,7 @@ const LogContent = (props: LogContentProps) => {
         ) : (
           <LogItemDetailsContent
             keyItem={keyItem}
+            defaultExpanded={!!nowrapChecked}
             onInsertQuery={onInsertQuery}
             onInsertExclusion={onInsertExclusion}
             content={content}
@@ -76,6 +80,7 @@ const LogContent = (props: LogContentProps) => {
       ) : (
         <LogContentParse
           foldingChecked={foldingChecked}
+          defaultExpanded={!!nowrapChecked}
           secondaryIndexKeys={jsonIndexKeys}
           logContent={newLog[keyItem]}
           rowKeyItem={keyItem}

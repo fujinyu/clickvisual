@@ -1,5 +1,5 @@
 import { Button, Popover } from "antd";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import classNames from "classnames";
 import logItemStyles from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogList/LogItem/index.less";
 import { LOGMAXTEXTLENGTH } from "@/config/config";
@@ -16,10 +16,17 @@ interface onInsertQuery {
   highlightFlag: any;
   isNotTimeKey: any;
   onInsertExclusion: any;
+  /** 默认展开正文（不换行模式） */
+  defaultExpanded?: boolean;
 }
 
 const LogItemDetailsContent = (props: onInsertQuery) => {
-  const [isHidden, setIsHidden] = useState<boolean>(true);
+  const { defaultExpanded } = props;
+  const [isHidden, setIsHidden] = useState<boolean>(!defaultExpanded);
+  // 切换不换行开关时，重置该条日志的展开/收起默认态
+  useEffect(() => {
+    setIsHidden(!defaultExpanded);
+  }, [defaultExpanded]);
   const {
     onInsertQuery,
     content,
