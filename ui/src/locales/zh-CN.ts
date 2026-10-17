@@ -555,6 +555,8 @@ export default {
   "log.index.manage.message.save.success": "保存成功",
   "log.index.baseField": "基础字段",
   "log.index.logField": "日志字段",
+  "log.index.panel.collapse": "收起字段面板",
+  "log.index.panel.expand": "展开字段面板",
 
   "log.highChart.tooltip.startTime": "开始时间：",
   "log.highChart.tooltip.endTime": "结束时间：",

@@ -25,7 +25,8 @@ export const DefaultPane = {
   histogramChecked: false,
   foldingChecked: false,
   ascChecked: false,
-  rawLogChecked: false,
+  rawLogChecked: true,
+  fieldPanelChecked: false,
   baseFieldsIndexList: undefined,
   logFieldsIndexList: undefined,
   logState: 0,
@@ -38,7 +39,7 @@ const useLogPanes = () => {
   // 日志 Tab 标签
   const [logPanes, setLogPanes] = useState<{ [Key: string]: PaneType }>({});
   const [paneKeys, setPaneKeys] = useState<string[]>([]);
-  const { onChangeFoldLogStorage, getCurrentFoldLogFlag } = useLocalStorages();
+  const { onChangePaneLogPrefs, getPaneLogPrefs } = useLocalStorages();
 
   const removeLogPane = (key: string) => {
     const currentPanes = { ...logPanes };
@@ -52,11 +53,20 @@ const useLogPanes = () => {
       setPaneKeys((paneKeys) => [...paneKeys, key]);
     }
     const panes = { ...logPanes };
-    const storage = getCurrentFoldLogFlag(pane.paneId);
-    if (storage) {
-      pane.foldingChecked = storage.flag;
+    const prefs = getPaneLogPrefs(pane.paneId);
+    if (prefs) {
+      pane.foldingChecked = prefs.flag;
+      pane.histogramChecked = prefs.histogramChecked ?? pane.histogramChecked;
+      pane.rawLogChecked = prefs.rawLogChecked ?? pane.rawLogChecked;
+      pane.fieldPanelChecked =
+        prefs.fieldPanelChecked ?? pane.fieldPanelChecked;
+      // URL 显式带 asc 时以 URL 为准，否则回落到该日志库记住的排序
+      if (pane.by !== "asc") {
+        pane.by = (prefs.ascChecked ?? pane.ascChecked) ? "asc" : "desc";
+      }
+      pane.ascChecked = pane.by === "asc";
     } else {
-      onChangeFoldLogStorage({ tid: pane.paneId, flag: pane.foldingChecked });
+      onChangePaneLogPrefs(pane);
     }
     panes[key] = { ...DefaultPane, ...pane };
     setLogPanes(panes);
@@ -69,10 +79,7 @@ const useLogPanes = () => {
   ) => {
     const panes = { ...(oldPanes ?? logPanes) };
     panes[key] = newPane;
-    onChangeFoldLogStorage({
-      tid: newPane.paneId,
-      flag: newPane.foldingChecked,
-    });
+    onChangePaneLogPrefs(newPane);
     setLogPanes(panes);
   };
 

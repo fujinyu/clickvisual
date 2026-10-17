@@ -2,8 +2,35 @@ import { UrlStateType } from "@/pages/DataLogs/hooks/useLogUrlParams";
 
 interface FoldLogStorageType {
   tid: string;
+  /**
+   * 折叠日志开关，沿用历史字段名，避免老数据失效
+   */
   flag: boolean;
+  histogramChecked?: boolean;
+  ascChecked?: boolean;
+  rawLogChecked?: boolean;
+  fieldPanelChecked?: boolean;
 }
+
+const PANE_STORAGE_KEY = "clickvisual-fold-log-flag";
+
+export interface PanePrefsInput {
+  paneId: string;
+  histogramChecked: boolean;
+  foldingChecked: boolean;
+  ascChecked: boolean;
+  rawLogChecked: boolean;
+  fieldPanelChecked?: boolean;
+}
+
+const toPaneStorage = (pane: PanePrefsInput): FoldLogStorageType => ({
+  tid: pane.paneId,
+  flag: pane.foldingChecked,
+  histogramChecked: pane.histogramChecked,
+  ascChecked: pane.ascChecked,
+  rawLogChecked: pane.rawLogChecked,
+  fieldPanelChecked: pane.fieldPanelChecked,
+});
 
 export enum LocalModuleType {
   dataLogs = "data-Logs",
@@ -19,27 +46,30 @@ export interface LastDataLogsStateType extends UrlStateType {
 }
 
 const useLocalStorages = () => {
-  const getCurrentFoldLogFlag = (tid: string) => {
+  const getPaneLogPrefs = (tid: string) => {
     const foldLogStorages: FoldLogStorageType[] = JSON.parse(
-      localStorage.getItem("clickvisual-fold-log-flag") || "[]"
+      localStorage.getItem(PANE_STORAGE_KEY) || "[]"
     );
     return foldLogStorages.find((item: any) => item.tid === tid);
   };
 
-  const onChangeFoldLogStorage = (foldFlag: FoldLogStorageType) => {
+  const onChangePaneLogPrefs = (pane: PanePrefsInput) => {
     const foldLogStorages: FoldLogStorageType[] = JSON.parse(
-      localStorage.getItem("clickvisual-fold-log-flag") || "[]"
+      localStorage.getItem(PANE_STORAGE_KEY) || "[]"
     );
     const currentIndex = foldLogStorages.findIndex(
-      (item: any) => item.tid === foldFlag.tid
+      (item: any) => item.tid === pane.paneId
     );
     if (currentIndex > -1) {
-      foldLogStorages[currentIndex].flag = foldFlag.flag;
+      foldLogStorages[currentIndex] = {
+        ...foldLogStorages[currentIndex],
+        ...toPaneStorage(pane),
+      };
     } else {
-      foldLogStorages.push(foldFlag);
+      foldLogStorages.push(toPaneStorage(pane));
     }
     localStorage.setItem(
-      "clickvisual-fold-log-flag",
+      PANE_STORAGE_KEY,
       JSON.stringify(foldLogStorages)
     );
   };
@@ -119,8 +149,8 @@ const useLocalStorages = () => {
   };
 
   return {
-    getCurrentFoldLogFlag,
-    onChangeFoldLogStorage,
+    getPaneLogPrefs,
+    onChangePaneLogPrefs,
     getLastDataLogsState,
     onChangeDataLogsState,
     onSetLocalData,

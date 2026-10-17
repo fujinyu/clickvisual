@@ -4,7 +4,11 @@ import RawLogsIndexes from "@/pages/DataLogs/components/QueryResult/Content/RawL
 import ManageIndexModal from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogsIndexes/ManageIndexModal";
 import queryResultStyles from "@/pages/DataLogs/components/QueryResult/index.less";
 import { useModel } from "@umijs/max";
-import { Spin } from "antd";
+import {
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+} from "@ant-design/icons";
+import { Button, Spin, Tooltip } from "antd";
 import classNames from "classnames";
 import { useMemo, useState } from "react";
 import { useIntl } from "umi";
@@ -31,7 +35,7 @@ const RawLogContent = (props: { tid: string }) => {
     lastLoadingTid,
     doGetAnalysisField,
   } = useModel("dataLogs");
-  const { logPanes } = logPanesHelper;
+  const { logPanes, updateLogPane } = logPanesHelper;
   const [baseActiveKey, setBaseActiveKey] = useState<string[]>([]);
   const [logActiveKey, setLogActiveKey] = useState<string[]>([]);
 
@@ -42,25 +46,63 @@ const RawLogContent = (props: { tid: string }) => {
 
   const i18n = useIntl();
 
+  const fieldPanelChecked = !!oldPane?.fieldPanelChecked;
+
+  const handleChangeFieldPanelChecked = () => {
+    if (!oldPane) return;
+    updateLogPane(
+      oldPane.paneId,
+      { ...oldPane, fieldPanelChecked: !fieldPanelChecked },
+      logPanes
+    );
+  };
+
   return (
     <div className={queryResultStyles.content}>
-      <div className={queryResultStyles.indexList}>
-        <RawLogsIndexes
-          oldPane={oldPane}
-          indexType={IndexType.baseField}
-          baseActiveKey={baseActiveKey}
-          logActiveKey={logActiveKey}
-          setLogActiveKey={setLogActiveKey}
-          setBaseActiveKey={setBaseActiveKey}
-        />
-        <RawLogsIndexes
-          oldPane={oldPane}
-          indexType={IndexType.logField}
-          baseActiveKey={baseActiveKey}
-          logActiveKey={logActiveKey}
-          setLogActiveKey={setLogActiveKey}
-          setBaseActiveKey={setBaseActiveKey}
-        />
+      <div
+        className={classNames(
+          queryResultStyles.indexList,
+          !fieldPanelChecked && queryResultStyles.indexListCollapsed
+        )}
+      >
+        <div className={queryResultStyles.indexListBar}>
+          <Tooltip
+            title={i18n.formatMessage({
+              id: fieldPanelChecked
+                ? "log.index.panel.collapse"
+                : "log.index.panel.expand",
+            })}
+          >
+            <Button
+              type="text"
+              size="small"
+              onClick={handleChangeFieldPanelChecked}
+              icon={
+                fieldPanelChecked ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />
+              }
+            />
+          </Tooltip>
+        </div>
+        {fieldPanelChecked && (
+          <>
+            <RawLogsIndexes
+              oldPane={oldPane}
+              indexType={IndexType.baseField}
+              baseActiveKey={baseActiveKey}
+              logActiveKey={logActiveKey}
+              setLogActiveKey={setLogActiveKey}
+              setBaseActiveKey={setBaseActiveKey}
+            />
+            <RawLogsIndexes
+              oldPane={oldPane}
+              indexType={IndexType.logField}
+              baseActiveKey={baseActiveKey}
+              logActiveKey={logActiveKey}
+              setLogActiveKey={setLogActiveKey}
+              setBaseActiveKey={setBaseActiveKey}
+            />
+          </>
+        )}
       </div>
       <div className={queryResultStyles.queryDetail}>
         {oldPane?.histogramChecked && (

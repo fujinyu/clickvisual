@@ -39,6 +39,10 @@ export type PaneType = {
   foldingChecked: boolean;
   ascChecked: boolean
   rawLogChecked: boolean
+  /**
+   * 基础字段/日志字段面板是否展开，默认收起
+   */
+  fieldPanelChecked?: boolean;
   mode?: number;
   baseFieldsIndexList?: IndexInfoType[];
   logFieldsIndexList?: IndexInfoType[];

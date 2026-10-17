@@ -588,6 +588,8 @@ export default {
   "log.index.manage.message.save.success": "Save success",
   "log.index.baseField": "Base field",
   "log.index.logField": "Log field",
+  "log.index.panel.collapse": "Collapse field panel",
+  "log.index.panel.expand": "Expand field panel",
 
   "log.highChart.tooltip.startTime": "start time: ",
   "log.highChart.tooltip.endTime": "end time: ",
