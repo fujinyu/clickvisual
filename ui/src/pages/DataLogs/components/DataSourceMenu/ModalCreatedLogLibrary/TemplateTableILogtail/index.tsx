@@ -1,5 +1,6 @@
 import {Form, Input, InputNumber} from "antd";
 import {useIntl} from "umi";
+import StoragePolicyFields from "../StoragePolicyFields";
 
 export interface TemplateTableType {
   //   formRef: any;
@@ -80,6 +81,7 @@ const TemplateTableILogtail = (props: TemplateTableType) => {
           )}
         />
       </Form.Item>
+      <StoragePolicyFields />
     </>
   );
 };

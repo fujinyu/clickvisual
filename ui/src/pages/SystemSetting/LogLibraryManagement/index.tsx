@@ -1,5 +1,9 @@
 import ModalCreatedLogLibrary from "@/pages/DataLogs/components/DataSourceMenu/ModalCreatedLogLibrary";
-import api, { DatabaseResponse } from "@/services/dataLogs";
+import api, {
+  DatabaseResponse,
+  LogLibraryManagementColumn,
+  LogLibraryManagementPhysicalTable,
+} from "@/services/dataLogs";
 import { CheckRoot } from "@/services/pms";
 import systemSettingApi, { InstanceType } from "@/services/systemSetting";
 import {
@@ -22,6 +26,7 @@ import {
   Select,
   Spin,
   Table,
+  Tabs,
   Typography,
 } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -46,12 +51,6 @@ interface InspectorTarget {
   tableName: string;
 }
 
-interface TableColumnMetadata {
-  name: string;
-  type: number;
-  typeDesc: string;
-}
-
 const LogLibraryManagement = () => {
   const i18n = useIntl();
   const [checking, setChecking] = useState(true);
@@ -66,8 +65,8 @@ const LogLibraryManagement = () => {
   const [inspector, setInspector] = useState<InspectorTarget>();
   const [inspectorLoading, setInspectorLoading] = useState(false);
   const [inspectorError, setInspectorError] = useState(false);
-  const [columns, setColumns] = useState<TableColumnMetadata[]>([]);
-  const [ddl, setDdl] = useState("");
+  const [tables, setTables] = useState<LogLibraryManagementPhysicalTable[]>([]);
+  const [activeTable, setActiveTable] = useState("");
   const {
     onChangeAddLogToDatabase,
     onChangeLogLibraryCreatedModalVisible,
@@ -223,26 +222,27 @@ const LogLibraryManagement = () => {
     setInspector(target);
     setInspectorLoading(true);
     setInspectorError(false);
-    setColumns([]);
-    setDdl("");
+    setTables([]);
+    setActiveTable("");
     try {
-      if (target.kind === "columns") {
-        const res = await api.getLogLibraryManagementTableColumns(
-          target.iid,
-          target.databaseName,
-          target.tableName
-        );
-        if (res?.code !== 0) throw new Error(res?.msg || "request failed");
-        setColumns(res.data || []);
-      } else {
-        const res = await api.getLogLibraryManagementTableDDL(
-          target.iid,
-          target.databaseName,
-          target.tableName
-        );
-        if (res?.code !== 0) throw new Error(res?.msg || "request failed");
-        setDdl(res.data?.ddl || "");
-      }
+      const res =
+        target.kind === "columns"
+          ? await api.getLogLibraryManagementTableColumns(
+              target.iid,
+              target.databaseName,
+              target.tableName
+            )
+          : await api.getLogLibraryManagementTableDDL(
+              target.iid,
+              target.databaseName,
+              target.tableName
+            );
+      if (res?.code !== 0) throw new Error(res?.msg || "request failed");
+      // One log library maps to several physical tables (local / stream / view /
+      // distributed), so the API always returns a list keyed by physical name.
+      const list = res.data?.tables || [];
+      setTables(list);
+      setActiveTable(list[0]?.name || "");
     } catch (error) {
       setInspectorError(true);
     } finally {
@@ -259,10 +259,18 @@ const LogLibraryManagement = () => {
       tableName: row.tableName,
     });
 
+  const activeDDL = useMemo(
+    () => tables.find((item) => item.name === activeTable)?.ddl || "",
+    [tables, activeTable]
+  );
+
+  const tabLabel = (item: LogLibraryManagementPhysicalTable) =>
+    item.role ? `${item.role} · ${item.name}` : item.name;
+
   const copyDDL = async () => {
-    if (!ddl) return;
+    if (!activeDDL) return;
     try {
-      await navigator.clipboard.writeText(ddl);
+      await navigator.clipboard.writeText(activeDDL);
       message.success(
         i18n.formatMessage({ id: "logLibraryManagement.ddl.copied" })
       );
@@ -305,16 +313,23 @@ const LogLibraryManagement = () => {
             {i18n.formatMessage({ id: "logLibraryManagement.description" })}
           </span>
         </div>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          disabled={!selectedDatabase}
-          onClick={() =>
-            openCreate(databases.find((item) => item.id === selectedDatabase))
-          }
-        >
-          {i18n.formatMessage({ id: "logLibraryManagement.create" })}
-        </Button>
+        <div className={styles.headerAction}>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            disabled={!selectedDatabase}
+            onClick={() =>
+              openCreate(databases.find((item) => item.id === selectedDatabase))
+            }
+          >
+            {i18n.formatMessage({ id: "logLibraryManagement.create" })}
+          </Button>
+          {!selectedDatabase && (
+            <span>
+              {i18n.formatMessage({ id: "logLibraryManagement.create.hint" })}
+            </span>
+          )}
+        </div>
       </div>
       <div className={styles.toolbar}>
         <Select
@@ -474,35 +489,59 @@ const LogLibraryManagement = () => {
             ) : null}
           </div>
         ) : inspector?.kind === "columns" ? (
-          <Table<TableColumnMetadata>
-            rowKey="name"
+          <Tabs
             size="small"
-            pagination={false}
-            dataSource={columns}
-            columns={[
-              {
-                title: i18n.formatMessage({
-                  id: "logLibraryManagement.column.name",
-                }),
-                dataIndex: "name",
-              },
-              {
-                title: i18n.formatMessage({
-                  id: "logLibraryManagement.column.type",
-                }),
-                dataIndex: "typeDesc",
-              },
-            ]}
+            activeKey={activeTable}
+            onChange={setActiveTable}
+            items={tables.map((item) => ({
+              key: item.name,
+              label: tabLabel(item),
+              children: (
+                <Table<LogLibraryManagementColumn>
+                  rowKey="name"
+                  size="small"
+                  pagination={false}
+                  dataSource={item.columns || []}
+                  columns={[
+                    {
+                      title: i18n.formatMessage({
+                        id: "logLibraryManagement.column.name",
+                      }),
+                      dataIndex: "name",
+                    },
+                    {
+                      title: i18n.formatMessage({
+                        id: "logLibraryManagement.column.type",
+                      }),
+                      dataIndex: "typeDesc",
+                    },
+                  ]}
+                />
+              ),
+            }))}
           />
         ) : (
           <>
+            <Tabs
+              size="small"
+              activeKey={activeTable}
+              onChange={setActiveTable}
+              items={tables.map((item) => ({
+                key: item.name,
+                label: tabLabel(item),
+              }))}
+            />
             <div className={styles.inspectorToolbar}>
-              <Button icon={<CopyOutlined />} onClick={copyDDL} disabled={!ddl}>
+              <Button
+                icon={<CopyOutlined />}
+                onClick={copyDDL}
+                disabled={!activeDDL}
+              >
                 {i18n.formatMessage({ id: "logLibraryManagement.ddl.copy" })}
               </Button>
             </div>
             <Input.TextArea
-              value={ddl}
+              value={activeDDL}
               readOnly
               autoSize={{ minRows: 12, maxRows: 28 }}
             />

@@ -55,6 +55,11 @@ type ReqCreateStorageByTemplateILogtail struct {
 	Days       int    `form:"days" binding:"required"`
 	Name       string `form:"name" binding:"required"`
 	Topic      string `form:"topic" binding:"required"`
+
+	// Optional ClickHouse hot/cold tiering, same semantics as ReqStorageCreate.
+	StoragePolicy string `form:"storagePolicy"`
+	ColdVolume    string `form:"coldVolume"`
+	HotDays       int    `form:"hotDays"`
 }
 
 type ReqCreateAgentStorage struct {

@@ -100,6 +100,8 @@ export default {
   "logLibraryManagement.title": "日志管理",
   "logLibraryManagement.description": "集中管理实例下的日志库",
   "logLibraryManagement.create": "新增日志库",
+  "logLibraryManagement.create.hint":
+    "需先在上方选择实例和数据库，新增日志库按钮才可使用",
   "logLibraryManagement.loadingList": "日志库列表将在此处展示",
   "logLibraryManagement.instance": "选择实例",
   "logLibraryManagement.database": "选择数据库",

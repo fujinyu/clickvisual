@@ -190,8 +190,15 @@ export interface LogLibraryManagementColumn {
   typeDesc: string;
 }
 
-export interface LogLibraryManagementDDLResponse {
-  ddl: string;
+export interface LogLibraryManagementPhysicalTable {
+  name: string;
+  role?: string;
+  columns?: LogLibraryManagementColumn[];
+  ddl?: string;
+}
+
+export interface LogLibraryManagementInspectResponse {
+  tables: LogLibraryManagementPhysicalTable[];
 }
 
 export interface CreateLocalTableRequest {
@@ -795,7 +802,7 @@ export default {
     database: string,
     table: string
   ) {
-    return request<API.Res<LogLibraryManagementColumn[]>>(
+    return request<API.Res<LogLibraryManagementInspectResponse>>(
       process.env.PUBLIC_PATH +
         `api/v1/log-library-management/instances/${iid}/databases/${encodeURIComponent(
           database
@@ -809,7 +816,7 @@ export default {
     database: string,
     table: string
   ) {
-    return request<API.Res<LogLibraryManagementDDLResponse>>(
+    return request<API.Res<LogLibraryManagementInspectResponse>>(
       process.env.PUBLIC_PATH +
         `api/v1/log-library-management/instances/${iid}/databases/${encodeURIComponent(
           database

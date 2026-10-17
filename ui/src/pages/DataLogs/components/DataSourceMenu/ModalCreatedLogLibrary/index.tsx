@@ -103,6 +103,9 @@ const ModalCreatedLogLibrary = (props: {
               topic: field.topic,
               days: field.days,
               name: field.name,
+              storagePolicy: field.storagePolicy,
+              coldVolume: field.coldVolume,
+              hotDays: field.hotDays,
             })
            : field.mode === 5
            ? doCreatedTableTemplate.run("ilogtail_k8s", {
@@ -111,6 +114,9 @@ const ModalCreatedLogLibrary = (props: {
               topic: field.topic,
               days: field.days,
               name: field.name,
+              storagePolicy: field.storagePolicy,
+              coldVolume: field.coldVolume,
+              hotDays: field.hotDays,
             })
           : field.mode === 21
           ? (managementMode

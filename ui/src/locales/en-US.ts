@@ -100,6 +100,8 @@ export default {
   "logLibraryManagement.title": "Log libraries",
   "logLibraryManagement.description": "Manage log libraries across instances",
   "logLibraryManagement.create": "Add log library",
+  "logLibraryManagement.create.hint":
+    "Select an instance and a database above to enable this button",
   "logLibraryManagement.loadingList": "Log libraries will appear here",
   "logLibraryManagement.instance": "Select instance",
   "logLibraryManagement.database": "Select database",

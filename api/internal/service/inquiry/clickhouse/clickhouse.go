@@ -950,41 +950,35 @@ func (c *ClickHouseX) ListColumn(database, table string, isTimeField bool) (res 
 }
 
 // ListStoragePolicies aggregates system.storage_policies rows into per-policy
-// volume lists. Rows are ordered by (policy, volume_index, disk) so callers
-// can safely take the last volume as the default "cold" target.
+// volume lists. One row is one volume, whose disks come back as an Array(String).
+// Rows are ordered by (policy, volume_priority) so callers can safely take the
+// last volume as the default "cold" target.
 func (c *ClickHouseX) ListStoragePolicies() (res []*view.RespStoragePolicy, err error) {
 	res = make([]*view.RespStoragePolicy, 0)
-	const q = "SELECT policy_name, volume_name, volume_index, disk_name FROM system.storage_policies ORDER BY policy_name, volume_index, disk_name"
+	const q = "SELECT policy_name, volume_name, volume_priority, disks FROM system.storage_policies ORDER BY policy_name, volume_priority"
 	rows, err := c.doQueryWithRetry(q, false)
 	if err != nil {
 		return nil, errors.WithMessage(err, "query system.storage_policies")
 	}
 	policyPos := make(map[string]int)
-	volumePos := make(map[string]map[int]int)
 	for _, row := range rows {
 		pn, _ := row["policy_name"].(string)
 		vn, _ := row["volume_name"].(string)
-		dn, _ := row["disk_name"].(string)
-		vi := toIntFromCK(row["volume_index"])
 		if pn == "" {
 			continue
 		}
+		disks, _ := row["disks"].([]string)
 		pi, ok := policyPos[pn]
 		if !ok {
 			res = append(res, &view.RespStoragePolicy{PolicyName: pn, Volumes: make([]view.RespVolumeInfo, 0)})
 			pi = len(res) - 1
 			policyPos[pn] = pi
-			volumePos[pn] = make(map[int]int)
 		}
-		p, exists := volumePos[pn][vi]
-		if !exists {
-			res[pi].Volumes = append(res[pi].Volumes, view.RespVolumeInfo{Name: vn, Index: vi, Disks: make([]string, 0)})
-			p = len(res[pi].Volumes) - 1
-			volumePos[pn][vi] = p
-		}
-		if dn != "" {
-			res[pi].Volumes[p].Disks = append(res[pi].Volumes[p].Disks, dn)
-		}
+		res[pi].Volumes = append(res[pi].Volumes, view.RespVolumeInfo{
+			Name:  vn,
+			Index: toIntFromCK(row["volume_priority"]),
+			Disks: disks,
+		})
 	}
 	return
 }

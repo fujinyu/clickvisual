@@ -110,6 +110,21 @@ func (s *srvStorage) stop() {
 	}
 }
 
+// applyILogtailTiering copies the optional hot/cold tiering fields onto the
+// create request, mirroring the sanity checks the direct create endpoint does.
+func applyILogtailTiering(cp *view.ReqStorageCreate, param view.ReqCreateStorageByTemplateILogtail) error {
+	if param.HotDays < 0 {
+		return fmt.Errorf("hotDays must not be negative")
+	}
+	if (param.StoragePolicy == "") != (param.ColdVolume == "") {
+		return fmt.Errorf("storagePolicy and coldVolume must be set together (or both empty)")
+	}
+	cp.StoragePolicy = param.StoragePolicy
+	cp.ColdVolume = param.ColdVolume
+	cp.HotDays = param.HotDays
+	return nil
+}
+
 func (s *srvStorage) CreateByILogtailTemplate(uid int, databaseInfo db2.BaseDatabase, param view.ReqCreateStorageByTemplateILogtail) (err error) {
 	cp := view.ReqStorageCreate{
 		CreateType:              constx.TableCreateTypeJSONAsString,
@@ -133,6 +148,9 @@ func (s *srvStorage) CreateByILogtailTemplate(uid int, databaseInfo db2.BaseData
 	}
 	cp.Topics = param.Topic
 	cp.TableName = param.Name
+	if err = applyILogtailTiering(&cp, param); err != nil {
+		return
+	}
 	if err = s.createByIlogtailTemplateItem(uid, databaseInfo, cp); err != nil {
 		return err
 	}
@@ -171,6 +189,9 @@ func (s *srvStorage) CreateByILogtailK8sTemplate(uid int, databaseInfo db2.BaseD
 	}
 	cp.Topics = param.Topic
 	cp.TableName = param.Name
+	if err = applyILogtailTiering(&cp, param); err != nil {
+		return
+	}
 	if err = s.createByIlogtailTemplateItem(uid, databaseInfo, cp); err != nil {
 		return err
 	}
