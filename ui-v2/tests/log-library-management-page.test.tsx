@@ -1,11 +1,13 @@
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import LogLibraryManagementPage from "../src/domains/logLibrary/pages/LogLibraryManagementPage";
 
 const INSTANCE_ID = 101;
 const DATABASE_ID = 8;
 const TABLE_ID = 9527;
+const OPS_INSTANCE_ID = 102;
+const OPS_DATABASE_ID = 9;
 
 function jsonResponse(data: unknown) {
   return {
@@ -19,7 +21,11 @@ function createFetchMock() {
   const createPayloads: Record<string, unknown>[] = [];
   const updatePayloads: Record<string, unknown>[] = [];
   const templatePayloads: Record<string, unknown>[] = [];
+  const databasePayloads: Record<string, unknown>[] = [];
   const rebuildIds: number[] = [];
+  // The ops instance starts without any database registered in ClickVisual's
+  // metadata, which is exactly the case the "接入已有数据库" entry must handle.
+  const opsDatabases: Record<string, unknown>[] = [];
   const mock = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(
@@ -48,8 +54,34 @@ function createFetchMock() {
                 ]
               }
             ]
+          },
+          {
+            id: OPS_INSTANCE_ID,
+            instanceName: "运维实例",
+            desc: "ops",
+            databases: opsDatabases
           }
         ]);
+      }
+      if (
+        method === "GET" &&
+        /\/api\/v1\/instances\/\d+\/databases-exist$/.test(url.pathname)
+      ) {
+        return jsonResponse(["ops_logs", "system"]);
+      }
+      if (
+        method === "POST" &&
+        /\/api\/v1\/instances\/\d+\/databases$/.test(url.pathname)
+      ) {
+        databasePayloads.push(body);
+        opsDatabases.push({
+          id: OPS_DATABASE_ID,
+          iid: OPS_INSTANCE_ID,
+          databaseName: String(body?.databaseName ?? ""),
+          desc: String(body?.desc ?? ""),
+          tables: []
+        });
+        return jsonResponse(null);
       }
       if (
         method === "GET" &&
@@ -125,7 +157,15 @@ function createFetchMock() {
       return jsonResponse(null);
     }
   );
-  return { mock, createPayloads, updatePayloads, templatePayloads, rebuildIds };
+  return {
+    mock,
+    createPayloads,
+    updatePayloads,
+    templatePayloads,
+    databasePayloads,
+    rebuildIds,
+    opsDatabases
+  };
 }
 
 describe("LogLibraryManagementPage hot/cold tiering", () => {
@@ -234,5 +274,37 @@ describe("LogLibraryManagementPage hot/cold tiering", () => {
     await waitFor(() => expect(rebuildIds).toEqual([TABLE_ID]));
     expect(confirmSpy).toHaveBeenCalledTimes(1);
     confirmSpy.mockRestore();
+  });
+
+  it("registers an existing database of another instance and selects it", async () => {
+    const { mock, databasePayloads } = createFetchMock();
+    vi.stubGlobal("fetch", mock);
+    render(<LogLibraryManagementPage />);
+
+    fireEvent.click(await screen.findByText("新增日志库"));
+    fireEvent.click(screen.getByRole("button", { name: "接入已有数据库" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "接入已有数据库" });
+    fireEvent.change(within(dialog).getByLabelText("实例"), {
+      target: { value: String(OPS_INSTANCE_ID) }
+    });
+    fireEvent.change(within(dialog).getByLabelText("数据库"), {
+      target: { value: "ops_logs" }
+    });
+    fireEvent.change(within(dialog).getByLabelText("描述"), {
+      target: { value: "运维日志库" }
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "确认" }));
+
+    await waitFor(() => expect(databasePayloads).toHaveLength(1));
+    expect(databasePayloads[0]).toMatchObject({
+      databaseName: "ops_logs",
+      desc: "运维日志库",
+      type: 1
+    });
+
+    const databaseSelect = await screen.findByLabelText(/数据库/);
+    expect(within(databaseSelect).getByRole("option", { name: "运维实例 / ops_logs" })).toBeInTheDocument();
+    expect(databaseSelect).toHaveValue(String(OPS_DATABASE_ID));
   });
 });

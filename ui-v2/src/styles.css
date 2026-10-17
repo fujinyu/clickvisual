@@ -8306,7 +8306,10 @@ body .cv-query-fields-panel__popover-panel:has(.cv-query-fields-panel__stats) {
 }
 
 .cv-log-library-create {
+  display: flex;
+  flex-direction: column;
   width: min(560px, calc(100vw - 24px));
+  max-height: calc(100vh - 48px);
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--cv-border);
@@ -8323,6 +8326,7 @@ body .cv-query-fields-panel__popover-panel:has(.cv-query-fields-panel__stats) {
 }
 
 .cv-log-library-create__header {
+  flex: 0 0 auto;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -8361,7 +8365,11 @@ body .cv-query-fields-panel__popover-panel:has(.cv-query-fields-panel__stats) {
 }
 
 .cv-log-library-create__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   display: grid;
+  align-content: start;
   gap: 16px;
   padding: 20px 22px 22px;
 }
@@ -8385,6 +8393,11 @@ body .cv-query-fields-panel__popover-panel:has(.cv-query-fields-panel__stats) {
   font-size: 10px;
   font-style: normal;
   font-weight: 600;
+}
+
+.cv-log-library-field__label .cv-link-button {
+  margin-left: auto;
+  font-size: inherit;
 }
 
 .cv-log-library-field__control {
@@ -8456,6 +8469,7 @@ body .cv-query-fields-panel__popover-panel:has(.cv-query-fields-panel__stats) {
 }
 
 .cv-log-library-create__footer {
+  flex: 0 0 auto;
   display: flex;
   justify-content: flex-end;
   gap: 8px;

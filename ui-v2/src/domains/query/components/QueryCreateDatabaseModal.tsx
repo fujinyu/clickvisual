@@ -14,11 +14,14 @@ interface QueryCreateDatabaseModalProps {
   instance: QuerySourceInstance | null;
   onClose: () => void;
   onSuccess: (target: QuerySourceTreeTarget) => void;
+  instances?: QuerySourceInstance[];
+  defaultMode?: DatabaseMode;
+  onSelectInstance?: (instanceId: number) => void;
 }
 
-function buildInitialState() {
+function buildInitialState(mode: DatabaseMode = "create") {
   return {
-    mode: "create" as DatabaseMode,
+    mode,
     databaseName: "",
     cluster: "",
     desc: ""
@@ -29,7 +32,10 @@ export function QueryCreateDatabaseModal({
   open,
   instance,
   onClose,
-  onSuccess
+  onSuccess,
+  instances,
+  defaultMode = "create",
+  onSelectInstance
 }: QueryCreateDatabaseModalProps) {
   const [formState, setFormState] = useState(buildInitialState);
   const [databaseOptions, setDatabaseOptions] = useState<string[]>([]);
@@ -39,14 +45,14 @@ export function QueryCreateDatabaseModal({
 
   useEffect(() => {
     if (!open || !instance) {
-      setFormState(buildInitialState());
+      setFormState(buildInitialState(defaultMode));
       setDatabaseOptions([]);
       setClusterOptions([]);
       setErrorMessage("");
       return;
     }
     let active = true;
-    setFormState(buildInitialState());
+    setFormState(buildInitialState(defaultMode));
     setErrorMessage("");
     void Promise.all([
       listQueryManageInstances().catch(() => []),
@@ -62,7 +68,7 @@ export function QueryCreateDatabaseModal({
     return () => {
       active = false;
     };
-  }, [instance, open]);
+  }, [defaultMode, instance, open]);
 
   const requiresCluster = clusterOptions.length > 0;
   const title = useMemo(
@@ -137,7 +143,24 @@ export function QueryCreateDatabaseModal({
         <form className="cv-form-grid cv-query-modal__form" onSubmit={(event) => void handleSubmit(event)}>
           <label className="cv-form-row">
             <span className="cv-label">实例</span>
-            <input className="cv-input" aria-label="实例" value={instance.name} readOnly />
+            {instances && onSelectInstance ? (
+              <select
+                className="cv-input"
+                aria-label="实例"
+                value={instance.id}
+                onChange={(event) =>
+                  onSelectInstance(Number(event.target.value))
+                }
+              >
+                {instances.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input className="cv-input" aria-label="实例" value={instance.name} readOnly />
+            )}
           </label>
 
           <label className="cv-form-row">

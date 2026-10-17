@@ -15,7 +15,11 @@ import {
   type StoragePolicyResponse,
 } from "../api/logLibrary";
 import { listQuerySourceInstances } from "../../query/api/query";
-import type { QuerySourceInstance } from "../../query/types/contracts";
+import type {
+  QuerySourceInstance,
+  QuerySourceTreeTarget,
+} from "../../query/types/contracts";
+import { QueryCreateDatabaseModal } from "../../query/components/QueryCreateDatabaseModal";
 import { EditLogLibraryModal } from "../components/EditLogLibraryModal";
 import { TemplateILogtailK8sModal } from "../components/TemplateILogtailK8sModal";
 
@@ -60,6 +64,8 @@ export default function LogLibraryManagementPage() {
   const [preview, setPreview] = useState<LogLibraryJSONPreview | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [accessDatabaseOpen, setAccessDatabaseOpen] = useState(false);
+  const [accessInstanceId, setAccessInstanceId] = useState(0);
 
   async function load() {
     setLoading(true);
@@ -105,12 +111,42 @@ export default function LogLibraryManagementPage() {
     return 0;
   }, [instances, createForm.databaseId]);
 
+  const accessInstance = useMemo(
+    () =>
+      instances.find((instance) => instance.id === accessInstanceId) ?? null,
+    [instances, accessInstanceId],
+  );
+
   const selectedPolicyVolumes = useMemo(() => {
     const hit = policies.find(
       (policy) => policy.policyName === createForm.storagePolicy,
     );
     return hit?.volumes ?? [];
   }, [policies, createForm.storagePolicy]);
+
+  // Registering an existing ClickHouse database only adds metadata, so refresh
+  // the instance tree instead of the whole list and preselect the new database.
+  async function handleDatabaseRegistered(target: QuerySourceTreeTarget) {
+    try {
+      const nextInstances = await listQuerySourceInstances();
+      setInstances(nextInstances);
+      const database = nextInstances
+        .find((instance) => instance.id === target.instanceId)
+        ?.databases.find((item) => item.name === target.databaseName);
+      if (database) {
+        setCreateForm((current) => ({ ...current, databaseId: database.id }));
+        // The preview is resolved against a database, so it must be rebuilt
+        // before a new log library can be created in the one just registered.
+        setPreview(null);
+      }
+    } catch (refreshError) {
+      setError(
+        refreshError instanceof Error
+          ? refreshError.message
+          : "数据库列表刷新失败",
+      );
+    }
+  }
 
   // Load storage policies for the selected instance; any error (e.g. a
   // non-ClickHouse source) falls back to an empty list so the tiering section
@@ -713,11 +749,25 @@ export default function LogLibraryManagementPage() {
             </div>
 
             <div className="cv-log-library-create__body">
-              <label className="cv-log-library-field">
-                <span className="cv-log-library-field__label">
-                  数据库 <em>必填</em>
-                </span>
+              <div className="cv-log-library-field">
+                <div className="cv-log-library-field__label">
+                  <label htmlFor="cv-log-library-database">
+                    数据库 <em>必填</em>
+                  </label>
+                  <button
+                    type="button"
+                    className="cv-link-button"
+                    disabled={!instances.length}
+                    onClick={() => {
+                      setAccessInstanceId(createIid || instances[0]?.id || 0);
+                      setAccessDatabaseOpen(true);
+                    }}
+                  >
+                    接入已有数据库
+                  </button>
+                </div>
                 <select
+                  id="cv-log-library-database"
                   className="cv-select cv-log-library-field__control"
                   value={createForm.databaseId}
                   onChange={(event) =>
@@ -736,7 +786,7 @@ export default function LogLibraryManagementPage() {
                     )),
                   )}
                 </select>
-              </label>
+              </div>
 
               <label className="cv-log-library-field">
                 <span className="cv-log-library-field__label">
@@ -1048,6 +1098,17 @@ export default function LogLibraryManagementPage() {
           instances={instances}
           onClose={() => setK8sOpen(false)}
           onSuccess={() => void load()}
+        />
+      ) : null}
+      {accessDatabaseOpen ? (
+        <QueryCreateDatabaseModal
+          open
+          instance={accessInstance}
+          instances={instances}
+          defaultMode="access"
+          onClose={() => setAccessDatabaseOpen(false)}
+          onSelectInstance={setAccessInstanceId}
+          onSuccess={(target) => void handleDatabaseRegistered(target)}
         />
       ) : null}
     </section>
