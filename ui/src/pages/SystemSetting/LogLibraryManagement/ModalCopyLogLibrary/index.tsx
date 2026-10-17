@@ -229,6 +229,13 @@ const ModalCopyLogLibrary = (props: {
                     })}
                   </span>
                 )}
+                {result.fixed.length > 0 && (
+                  <span className={styles.resultFixed}>
+                    {t("logLibraryManagement.copy.resultFixed", {
+                      count: result.fixed.length,
+                    })}
+                  </span>
+                )}
               </div>
             }
             description={

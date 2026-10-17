@@ -150,6 +150,8 @@ export default {
   "logLibraryManagement.copy.resultSkipped":
     "{count} skipped (same name already exists in the target database)",
   "logLibraryManagement.copy.resultFailed": "{count} failed",
+  "logLibraryManagement.copy.resultFixed":
+    "{count} rebuilt to the standard collection structure (log_id/time_ns → Int64)",
   "logLibraryManagement.copy.failedList": "Log libraries not copied:",
   retry: "Retry",
   "menu.bigdata": "Data Analysis",

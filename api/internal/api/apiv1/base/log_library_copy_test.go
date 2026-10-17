@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/clickvisual/clickvisual/api/internal/pkg/component/core"
+	"github.com/clickvisual/clickvisual/api/internal/pkg/constx"
 	"github.com/clickvisual/clickvisual/api/internal/pkg/model/db"
 )
 
@@ -101,5 +102,59 @@ func TestRewriteLogLibraryCopyNames(t *testing.T) {
 	got := rewriteLogLibraryCopyNames([]string{"cv_logs.test_local", "test_view"}, "cv_logs", "cv_logs_bak")
 	if len(got) != 2 || got[0] != "cv_logs_bak.test_local" || got[1] != "test_view" {
 		t.Fatalf("unexpected rewritten names: %#v", got)
+	}
+}
+
+func TestLogLibraryIsKafkaPipeline(t *testing.T) {
+	pipeline := []int{constx.TableCreateTypeCV, constx.TableCreateTypeJSONEachRow, constx.TableCreateTypeUBW, constx.TableCreateTypeJSONAsString}
+	for _, createType := range pipeline {
+		if !logLibraryIsKafkaPipeline(&db.BaseTable{CreateType: createType}) {
+			t.Fatalf("expected create type %d to be a kafka pipeline table", createType)
+		}
+	}
+	for _, createType := range []int{constx.TableCreateTypeExist, constx.TableCreateTypeBufferNullDataPipe, constx.TableCreateTypeTraceCalculation} {
+		if logLibraryIsKafkaPipeline(&db.BaseTable{CreateType: createType}) {
+			t.Fatalf("expected create type %d not to be a kafka pipeline table", createType)
+		}
+	}
+}
+
+func TestLogLibraryMetadataNeedsInt64Fix(t *testing.T) {
+	cases := []struct {
+		name     string
+		anyJSON  string
+		expected bool
+	}{
+		{
+			name:     "legacy float64 log_id",
+			anyJSON:  `{"sourceMapping":{"data":[{"key":"log_id","value":"Float64"},{"key":"msg","value":"String"}]}}`,
+			expected: true,
+		},
+		{
+			name:     "legacy nullable float64 time_ns",
+			anyJSON:  `{"sourceMapping":{"data":[{"key":"time_ns","value":"Nullable(Float64)"}]}}`,
+			expected: true,
+		},
+		{
+			name:     "already fixed to int64",
+			anyJSON:  `{"sourceMapping":{"data":[{"key":"log_id","value":"Int64"},{"key":"time_ns","value":"Int64"}]}}`,
+			expected: false,
+		},
+		{
+			name:     "pipeline without log fields",
+			anyJSON:  `{"sourceMapping":{"data":[{"key":"msg","value":"String"}]}}`,
+			expected: false,
+		},
+		{
+			name:     "empty metadata",
+			anyJSON:  "",
+			expected: false,
+		},
+	}
+	for _, c := range cases {
+		got := logLibraryMetadataNeedsInt64Fix(&db.BaseTable{AnyJSON: c.anyJSON})
+		if got != c.expected {
+			t.Fatalf("%s: logLibraryMetadataNeedsInt64Fix() = %v, want %v", c.name, got, c.expected)
+		}
 	}
 }

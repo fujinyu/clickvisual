@@ -207,6 +207,7 @@ export interface LogLibraryCopyResult {
   skipped: string[];
   failed: string[];
   failedCount: number;
+  fixed: string[];
 }
 
 export interface CreateLocalTableRequest {

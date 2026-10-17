@@ -11,7 +11,9 @@ import (
 
 	"github.com/clickvisual/clickvisual/api/internal/invoker"
 	"github.com/clickvisual/clickvisual/api/internal/pkg/component/core"
+	"github.com/clickvisual/clickvisual/api/internal/pkg/constx"
 	"github.com/clickvisual/clickvisual/api/internal/pkg/model/db"
+	"github.com/clickvisual/clickvisual/api/internal/pkg/model/view"
 	"github.com/clickvisual/clickvisual/api/internal/service"
 	"github.com/clickvisual/clickvisual/api/internal/service/event"
 	"github.com/clickvisual/clickvisual/api/internal/service/inquiry/factory"
@@ -31,6 +33,9 @@ type logLibraryCopyResult struct {
 	Skipped     []string `json:"skipped"`
 	Failed      []string `json:"failed"`
 	FailedCount int      `json:"failedCount"`
+	// Fixed lists the log libraries whose structure was rebuilt to the
+	// standard collection structure (log_id/time_ns as Int64) while copying.
+	Fixed []string `json:"fixed"`
 }
 
 // LogLibraryCopy recreates the selected log libraries of the source database
@@ -117,6 +122,7 @@ func LogLibraryCopy(c *core.Context) {
 		Total:   len(req.TableIds),
 		Skipped: make([]string, 0),
 		Failed:  make([]string, 0),
+		Fixed:   make([]string, 0),
 	}
 	for _, id := range req.TableIds {
 		sourceTable, ok := sourceTableMap[id]
@@ -128,10 +134,14 @@ func LogLibraryCopy(c *core.Context) {
 			result.Skipped = append(result.Skipped, sourceTable.Name)
 			continue
 		}
-		if err = copyLogLibrary(c.Uid(), sourceTable, sourceDatabase, targetDatabase, sourceOp, targetOp); err != nil {
+		fixed, err := copyLogLibrary(c.Uid(), sourceTable, sourceDatabase, targetDatabase, sourceOp, targetOp)
+		if err != nil {
 			elog.Error("copyLogLibrary", elog.String("table", sourceTable.Name), elog.FieldErr(err))
 			result.Failed = append(result.Failed, sourceTable.Name)
 			continue
+		}
+		if fixed {
+			result.Fixed = append(result.Fixed, sourceTable.Name)
 		}
 		targetTableNames[sourceTable.Name] = true
 		result.Copied++
@@ -150,25 +160,33 @@ func LogLibraryCopy(c *core.Context) {
 // copyLogLibrary recreates one log library under the target database: every
 // physical table (local data, Kafka stream, materialized view, distributed) is
 // re-created from its current DDL, and the metadata rows (log library, analysis
-// fields, attach info) are inserted pointing at the target database.
-func copyLogLibrary(uid int, sourceTable *db.BaseTable, sourceDatabase, targetDatabase db.BaseDatabase, sourceOp, targetOp factory.Operator) error {
+// fields, attach info) are inserted pointing at the target database. When the
+// source log library would benefit from the "rebuild collection structure"
+// action (legacy Float64 log_id/time_ns), the copy is rebuilt to the standard
+// Int64 structure on the target database instead of inheriting the legacy one.
+// It reports whether the structure was rebuilt.
+func copyLogLibrary(uid int, sourceTable *db.BaseTable, sourceDatabase, targetDatabase db.BaseDatabase, sourceOp, targetOp factory.Operator) (bool, error) {
 	refs, err := logLibraryPhysicalTableRefs(*sourceTable, sourceDatabase.Name, sourceTable.Name)
 	if err != nil {
-		return errors.Wrap(err, "resolve physical tables")
+		return false, errors.Wrap(err, "resolve physical tables")
 	}
 	if len(refs) == 0 {
-		return errors.Errorf("no physical table resolved for %s", sourceTable.Name)
+		return false, errors.Errorf("no physical table resolved for %s", sourceTable.Name)
 	}
 	ddlByRole := make(map[string]string, len(refs))
+	created := make([]logLibraryPhysicalTableRef, 0, len(refs))
 	for _, ref := range refs {
 		ddl, ddlErr := sourceOp.GetCreateSQL(ref.Database, ref.Table)
 		if ddlErr != nil {
-			return errors.Wrapf(ddlErr, "read ddl of %s", ref.Name)
+			rollbackCopiedLogLibrary(targetOp, targetDatabase, 0, created)
+			return false, errors.Wrapf(ddlErr, "read ddl of %s", ref.Name)
 		}
 		ddl = rewriteLogLibraryCopyDDL(ddl, sourceDatabase, targetDatabase, sourceTable.Name)
 		if _, execErr := targetOp.DoSQL(ddl); execErr != nil {
-			return errors.Wrapf(execErr, "create %s", ref.Name)
+			rollbackCopiedLogLibrary(targetOp, targetDatabase, 0, created)
+			return false, errors.Wrapf(execErr, "create %s", ref.Name)
 		}
+		created = append(created, ref)
 		ddlByRole[ref.Role] = ddl
 	}
 	tx := invoker.Db.Begin()
@@ -201,12 +219,12 @@ func copyLogLibrary(uid int, sourceTable *db.BaseTable, sourceDatabase, targetDa
 	}
 	if err = db.TableCreate(tx, &targetTable); err != nil {
 		tx.Rollback()
-		return errors.WithMessage(err, "TableCreateFailed")
+		return false, errors.WithMessage(err, "TableCreateFailed")
 	}
 	indexes, err := db.IndexList(egorm.Conds{"tid": sourceTable.ID})
 	if err != nil {
 		tx.Rollback()
-		return errors.Wrap(err, "load analysis fields")
+		return false, errors.Wrap(err, "load analysis fields")
 	}
 	for _, index := range indexes {
 		if err = db.IndexCreate(tx, &db.BaseIndex{
@@ -219,7 +237,7 @@ func copyLogLibrary(uid int, sourceTable *db.BaseTable, sourceDatabase, targetDa
 			Kind:     index.Kind,
 		}); err != nil {
 			tx.Rollback()
-			return errors.WithMessage(err, "IndexCreateFailed")
+			return false, errors.WithMessage(err, "IndexCreateFailed")
 		}
 	}
 	attach := db.BaseTableAttach{Tid: sourceTable.ID}
@@ -231,10 +249,126 @@ func copyLogLibrary(uid int, sourceTable *db.BaseTable, sourceDatabase, targetDa
 		}
 		if err = newAttach.Create(tx); err != nil {
 			tx.Rollback()
-			return errors.WithMessage(err, "AttachCreateFailed")
+			return false, errors.WithMessage(err, "AttachCreateFailed")
 		}
 	}
-	return tx.Commit().Error
+	if err = tx.Commit().Error; err != nil {
+		return false, err
+	}
+	// The replayed copy carries the source structure as-is. When the source
+	// still uses the legacy Float64 log_id/time_ns, rebuild the copy on the
+	// target database so it arrives with the standard Int64 structure instead
+	// of inheriting the legacy one (same fix as the manual rebuild action).
+	needsFix, fixErr := logLibraryStructureNeedsFix(sourceOp, sourceTable, sourceDatabase.Name)
+	if fixErr != nil {
+		rollbackCopiedLogLibrary(targetOp, targetDatabase, targetTable.ID, refs)
+		return false, errors.Wrap(fixErr, "check collection structure")
+	}
+	if !needsFix {
+		return false, nil
+	}
+	rebuilder, ok := targetOp.(factory.StorageRebuilder)
+	if !ok {
+		rollbackCopiedLogLibrary(targetOp, targetDatabase, targetTable.ID, refs)
+		return false, errors.New("target datasource does not support storage rebuild")
+	}
+	if _, err = rebuilder.RebuildStorageInt64(targetTable.ID); err != nil {
+		rollbackCopiedLogLibrary(targetOp, targetDatabase, targetTable.ID, refs)
+		return false, errors.Wrap(err, "rebuild collection structure")
+	}
+	return true, nil
+}
+
+// logLibraryStructureNeedsFix reports whether the "rebuild collection
+// structure" action would change the source log library, i.e. whether its
+// collection metadata or its physical columns still declare log_id/time_ns as
+// Float64 (which cannot store 19-digit integers exactly). Only ClickVisual
+// kafka pipeline log libraries carry these fields; anything else is copied
+// as-is.
+func logLibraryStructureNeedsFix(sourceOp factory.Operator, sourceTable *db.BaseTable, sourceDatabaseName string) (bool, error) {
+	if !logLibraryIsKafkaPipeline(sourceTable) || sourceTable.AnyJSON == "" {
+		return false, nil
+	}
+	if logLibraryMetadataNeedsInt64Fix(sourceTable) {
+		return true, nil
+	}
+	// The metadata may already be fixed while the physical columns still are
+	// not (e.g. a partially failed rebuild), so check them as well.
+	candidates := []string{
+		sourceTable.Name,
+		sourceTable.Name + "_local",
+		sourceTable.Name + "_stream",
+		sourceTable.Name + "_local_stream",
+	}
+	query := fmt.Sprintf(
+		"SELECT table, name, type FROM system.columns WHERE database = '%s' AND table IN ('%s') AND name IN ('%s', '%s') AND type IN ('Float64', 'Nullable(Float64)')",
+		sourceDatabaseName, strings.Join(candidates, "','"), db.LogIdField, db.TimeNsField)
+	res, err := sourceOp.DoSQL(query)
+	if err != nil {
+		return false, err
+	}
+	return len(res.Logs) > 0, nil
+}
+
+// logLibraryIsKafkaPipeline reports whether the log library is fed by the
+// ClickVisual kafka pipeline, which is the only structure that carries the
+// log_id/time_ns fields and can be rebuilt.
+func logLibraryIsKafkaPipeline(sourceTable *db.BaseTable) bool {
+	switch sourceTable.CreateType {
+	case constx.TableCreateTypeCV, constx.TableCreateTypeJSONEachRow, constx.TableCreateTypeUBW, constx.TableCreateTypeJSONAsString:
+		return true
+	default:
+		return false
+	}
+}
+
+// logLibraryMetadataNeedsInt64Fix reports whether the collection metadata
+// still declares log_id/time_ns as Float64 (which cannot store 19-digit
+// integers exactly).
+func logLibraryMetadataNeedsInt64Fix(sourceTable *db.BaseTable) bool {
+	rsc := view.ReqStorageCreateUnmarshal(sourceTable.AnyJSON)
+	for _, item := range rsc.SourceMapping.Data {
+		if item.Key != db.LogIdField && item.Key != db.TimeNsField {
+			continue
+		}
+		if item.Typ == "Float64" || item.Typ == "Nullable(Float64)" {
+			return true
+		}
+	}
+	return false
+}
+
+// rollbackCopiedLogLibrary removes a log library that was just copied so a
+// later retry starts from a clean state: the physical tables created by the
+// replay are dropped and the metadata rows (when the log library was already
+// inserted, i.e. targetTableID > 0) are hard-deleted.
+func rollbackCopiedLogLibrary(targetOp factory.Operator, targetDatabase db.BaseDatabase, targetTableID int, refs []logLibraryPhysicalTableRef) {
+	for i := len(refs) - 1; i >= 0; i-- {
+		dropSQL := fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", refs[i].Database, refs[i].Table)
+		if targetDatabase.Cluster != "" {
+			dropSQL += fmt.Sprintf(" ON CLUSTER '%s'", targetDatabase.Cluster)
+		}
+		if _, err := targetOp.DoSQL(dropSQL); err != nil {
+			elog.Error("rollbackCopiedLogLibrary", elog.String("sql", dropSQL), elog.FieldErr(err))
+		}
+	}
+	if targetTableID == 0 {
+		return
+	}
+	tx := invoker.Db.Begin()
+	if err := db.TableDelete(tx, targetTableID); err != nil {
+		tx.Rollback()
+		elog.Error("rollbackCopiedLogLibrary", elog.Int("tid", targetTableID), elog.FieldErr(err))
+		return
+	}
+	if err := db.IndexDeleteBatch(tx, targetTableID, true); err != nil {
+		tx.Rollback()
+		elog.Error("rollbackCopiedLogLibrary", elog.Int("tid", targetTableID), elog.FieldErr(err))
+		return
+	}
+	if err := tx.Commit().Error; err != nil {
+		elog.Error("rollbackCopiedLogLibrary", elog.Int("tid", targetTableID), elog.FieldErr(err))
+	}
 }
 
 // rewriteLogLibraryCopyDDL re-points a CREATE TABLE / CREATE MATERIALIZED VIEW

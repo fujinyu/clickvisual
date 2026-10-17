@@ -147,6 +147,8 @@ export default {
   "logLibraryManagement.copy.resultSkipped":
     "跳过 {count} 个（目标数据库已存在同名日志库）",
   "logLibraryManagement.copy.resultFailed": "失败 {count} 个",
+  "logLibraryManagement.copy.resultFixed":
+    "已按采集结构标准修正 {count} 个（log_id/time_ns → Int64）",
   "logLibraryManagement.copy.failedList": "未成功复制的日志库：",
   retry: "重试",
   "menu.bigdata": "分析",
