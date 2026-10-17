@@ -118,6 +118,18 @@ a:focus-visible {
   * {
     transition-duration: 0.01ms !important;
   }
+
+  /* 弹层由 rc-trigger 用内联 left/top 定位：对齐时先把弹层重置到 (0,0) 再同步读取
+     getBoundingClientRect。上面的 * 规则会命中这些元素默认的 transition-property: all，
+     使 left/top 参与过渡，读到的仍是动画起始值，弹层因此被钉在视口左上角。 */
+  .ant-select-dropdown,
+  .ant-dropdown,
+  .ant-picker-dropdown,
+  .ant-cascader-dropdown,
+  .ant-popover,
+  .ant-tooltip {
+    transition-property: none !important;
+  }
 }
 
 // Compatible with IE11

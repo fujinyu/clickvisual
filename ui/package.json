@@ -4,6 +4,8 @@
   "private": true,
   "description": "An out-of-box UI solution for enterprise applications",
   "scripts": {
+    "install": "yarn install --frozen-lockfile",
+    "bootstrap": "npm config set registry http://mirrors.cloud.tencent.com/npm/ && npm install",
     "analyze": "cross-env ANALYZE=1 max build",
     "build": "max build NODE_OPTIONS=--max_old_space_size=4096",
     "build-ssl": "cross-env NODE_OPTIONS=\"--max_old_space_size=4096 --openssl-legacy-provider\" max build",
