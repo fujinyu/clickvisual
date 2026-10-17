@@ -27,6 +27,7 @@ export const DefaultPane = {
   ascChecked: false,
   rawLogChecked: true,
   fieldPanelChecked: false,
+  nowrapChecked: false,
   baseFieldsIndexList: undefined,
   logFieldsIndexList: undefined,
   logState: 0,
@@ -60,6 +61,7 @@ const useLogPanes = () => {
       pane.rawLogChecked = prefs.rawLogChecked ?? pane.rawLogChecked;
       pane.fieldPanelChecked =
         prefs.fieldPanelChecked ?? pane.fieldPanelChecked;
+      pane.nowrapChecked = prefs.nowrapChecked ?? pane.nowrapChecked;
       // URL 显式带 asc 时以 URL 为准，否则回落到该日志库记住的排序
       if (pane.by !== "asc") {
         pane.by = (prefs.ascChecked ?? pane.ascChecked) ? "asc" : "desc";

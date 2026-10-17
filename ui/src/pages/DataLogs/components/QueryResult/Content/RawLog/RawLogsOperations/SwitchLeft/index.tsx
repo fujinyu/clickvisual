@@ -4,6 +4,7 @@ import FoldingExpansionSwitch from "@/pages/DataLogs/components/QueryResult/Cont
 import HiddenFields from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogsOperations/SwitchLeft/HiddenFields";
 import AscSwitch from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogsOperations/SwitchLeft/AscSwitch";
 import RawLogSwitch from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogsOperations/SwitchLeft/RawLogSwitch";
+import NowrapSwitch from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogsOperations/SwitchLeft/NowrapSwitch";
 
 import { PaneType } from "@/models/datalogs/types";
 
@@ -14,6 +15,7 @@ const SwitchLeft = (props: { oldPane: PaneType | undefined }) => {
       <FoldingExpansionSwitch {...props} />
         <AscSwitch {...props} />
       <RawLogSwitch {...props} />
+      <NowrapSwitch {...props} />
       <HiddenFields {...props} />
 
     </Space>

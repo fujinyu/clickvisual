@@ -201,6 +201,14 @@ export interface LogLibraryManagementInspectResponse {
   tables: LogLibraryManagementPhysicalTable[];
 }
 
+export interface LogLibraryCopyResult {
+  total: number;
+  copied: number;
+  skipped: string[];
+  failed: string[];
+  failedCount: number;
+}
+
 export interface CreateLocalTableRequest {
   databaseName: string;
   tableName: string;
@@ -822,6 +830,24 @@ export default {
           database
         )}/tables/${encodeURIComponent(table)}/ddl`,
       { method: "GET" }
+    );
+  },
+
+  // Copy log libraries from the source database to the target database
+  async copyLogLibrary(data: {
+    sourceInstanceId: number;
+    sourceDatabaseId: number;
+    targetInstanceId: number;
+    targetDatabaseId: number;
+    tableIds: number[];
+  }) {
+    return request<API.Res<LogLibraryCopyResult>>(
+      process.env.PUBLIC_PATH +
+        `api/v1/log-library-management/databases/copy`,
+      {
+        method: "POST",
+        data,
+      }
     );
   },
 };

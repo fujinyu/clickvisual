@@ -305,6 +305,7 @@ const RawLogList = ({ oldPane }: { oldPane: PaneType | undefined }) => {
             <LogItem
               foldingChecked={oldPane?.foldingChecked}
               rawLogChecked={oldPane?.rawLogChecked}
+              nowrapChecked={oldPane?.nowrapChecked}
               log={logItem}
               key={index}
             />
@@ -314,10 +315,17 @@ const RawLogList = ({ oldPane }: { oldPane: PaneType | undefined }) => {
         linkDataList.map((item: any) => {
           return <LinkItem key={item.key} log={item} />;
         });
-  }, [logs?.isTrace, logState, list, oldPane?.foldingChecked, oldPane?.rawLogChecked, linkDataList]);
+  }, [logs?.isTrace, logState, list, oldPane?.foldingChecked, oldPane?.rawLogChecked, oldPane?.nowrapChecked, linkDataList]);
 
   return (
-    <div className={classNames(rawLogListStyles.rawLogListMain)}>{logList}</div>
+    <div
+      className={classNames(
+        rawLogListStyles.rawLogListMain,
+        oldPane?.nowrapChecked && rawLogListStyles.nowrapList
+      )}
+    >
+      {logList}
+    </div>
   );
 };
 export default RawLogList;

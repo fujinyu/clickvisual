@@ -49,6 +49,7 @@
         width: 100%;
         height: 48px;
         overflow: hidden;
+        font-size: 10px;
         line-height: 24px;
         text-overflow: ellipsis;
         -webkit-line-clamp: 2;
@@ -69,11 +70,45 @@
       }
     }
   }
+
+  // 不换行模式：日志正文单行展示，横向滚动条统一在整个列表底部
+  &.nowrap {
+    width: max-content;
+    min-width: 100%;
+
+    .right {
+      .logItemHideMain {
+        .logItemHideIndex {
+          display: block;
+          height: auto;
+          overflow: visible;
+          white-space: nowrap;
+          text-overflow: clip;
+        }
+      }
+    }
+
+    .details {
+      .logLine {
+        .logContent,
+        .logContentHighlight {
+          overflow: visible;
+          white-space: nowrap;
+          word-break: normal;
+
+          // JsonView 内部 .pre 用 pre-wrap，会让部分行重新换行，这里统一压成单行
+          span {
+            white-space: nowrap;
+          }
+        }
+      }
+    }
+  }
 }
 
 .details {
   flex: 1;
-  font-size: 14px;
+  font-size: 10px;
 
   .logLine {
     display: flex;
@@ -98,6 +133,11 @@
       margin-bottom: 0;
       margin-left: 4px;
       word-break: break-all;
+
+      // JsonView 的 .pre 自带 14px，会造成同行列表字号不一，统一跟随正文
+      span {
+        font-size: inherit;
+      }
 
       :global {
         .ant-tag {

@@ -34,6 +34,7 @@ const (
 
 	OpnTablesDelete         = "opn_tables_delete"
 	OpnTablesCreate         = "opn_tables_create"
+	OpnTablesCopy           = "opn_tables_copy"
 	OpnTableCreateSelfBuilt = "opn_tables_create_self_built"
 	OpnTablesUpdate         = "opn_tables_update"
 	OpnTablesIndexUpdate    = "opn_tables_index_update"
@@ -100,6 +101,7 @@ const (
 var OperationMap = map[string]string{
 	OpnTablesDelete:         "table delete",
 	OpnTablesCreate:         "table create",
+	OpnTablesCopy:           "table copy",
 	OpnTablesUpdate:         "table update",
 	OpnTableCreateSelfBuilt: "an existing data table is connected",
 	OpnTablesIndexUpdate:    "table analysis field updates",

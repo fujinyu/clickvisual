@@ -45,6 +45,7 @@ func v1(r *gin.RouterGroup) {
 	rootGroup.POST("/log-library-management/instances/:iid/tables-exist", core.Handle(base.TableCreateSelfBuilt))
 	rootGroup.POST("/log-library-management/instances/:iid/tables-exist-batch", core.Handle(base.TableCreateSelfBuiltBatch))
 	rootGroup.DELETE("/log-library-management/tables/:id", core.Handle(base.TableDelete))
+	rootGroup.POST("/log-library-management/databases/copy", core.Handle(base.LogLibraryCopy))
 	// Cluster-related interfaces
 	rootGroup.GET("/clusters", core.Handle(kube.ClusterList))
 	rootGroup.GET("/clusters/:clusterId/configmaps", core.Handle(kube.ConfigMapList))

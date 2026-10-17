@@ -43,6 +43,10 @@ export type PaneType = {
    * 基础字段/日志字段面板是否展开，默认收起
    */
   fieldPanelChecked?: boolean;
+  /**
+   * 日志正文不换行，超长时行内横向滚动
+   */
+  nowrapChecked?: boolean;
   mode?: number;
   baseFieldsIndexList?: IndexInfoType[];
   logFieldsIndexList?: IndexInfoType[];

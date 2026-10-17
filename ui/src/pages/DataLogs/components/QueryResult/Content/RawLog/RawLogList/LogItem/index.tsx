@@ -6,13 +6,20 @@ import { useEffect, useMemo, useState } from "react";
 import LogItemFold from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogList/LogItem/LogItemFold";
 import { CaretDownOutlined, CaretRightOutlined } from "@ant-design/icons";
 import { Button } from "antd";
+import classNames from "classnames";
 
 interface LogItemProps {
   log: any;
   foldingChecked?: boolean;
   rawLogChecked?: boolean;
+  nowrapChecked?: boolean;
 }
-const LogItem = ({ log, foldingChecked, rawLogChecked }: LogItemProps) => {
+const LogItem = ({
+  log,
+  foldingChecked,
+  rawLogChecked,
+  nowrapChecked,
+}: LogItemProps) => {
   // 是否折叠日志，true 为是，false 为否
   const [isFold, setIsFold] = useState<boolean>(true);
 
@@ -47,7 +54,12 @@ const LogItem = ({ log, foldingChecked, rawLogChecked }: LogItemProps) => {
   }, [log._time_nanosecond_, log._time_second_]);
 
   return (
-    <div className={logItemStyles.logItemMain}>
+    <div
+      className={classNames(
+        logItemStyles.logItemMain,
+        nowrapChecked && logItemStyles.nowrap
+      )}
+    >
       <div className={logItemStyles.left}>
         <div className={logItemStyles.flexBox}>
           <Button

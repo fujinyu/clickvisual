@@ -1,4 +1,5 @@
 import ModalCreatedLogLibrary from "@/pages/DataLogs/components/DataSourceMenu/ModalCreatedLogLibrary";
+import ModalCopyLogLibrary from "@/pages/SystemSetting/LogLibraryManagement/ModalCopyLogLibrary";
 import api, {
   DatabaseResponse,
   LogLibraryManagementColumn,
@@ -67,6 +68,7 @@ const LogLibraryManagement = () => {
   const [inspectorError, setInspectorError] = useState(false);
   const [tables, setTables] = useState<LogLibraryManagementPhysicalTable[]>([]);
   const [activeTable, setActiveTable] = useState("");
+  const [copyModalOpen, setCopyModalOpen] = useState(false);
   const {
     onChangeAddLogToDatabase,
     onChangeLogLibraryCreatedModalVisible,
@@ -314,16 +316,26 @@ const LogLibraryManagement = () => {
           </span>
         </div>
         <div className={styles.headerAction}>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            disabled={!selectedDatabase}
-            onClick={() =>
-              openCreate(databases.find((item) => item.id === selectedDatabase))
-            }
-          >
-            {i18n.formatMessage({ id: "logLibraryManagement.create" })}
-          </Button>
+          <div className={styles.headerButtons}>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              disabled={!selectedDatabase}
+              onClick={() =>
+                openCreate(
+                  databases.find((item) => item.id === selectedDatabase)
+                )
+              }
+            >
+              {i18n.formatMessage({ id: "logLibraryManagement.create" })}
+            </Button>
+            <Button
+              icon={<CopyOutlined />}
+              onClick={() => setCopyModalOpen(true)}
+            >
+              {i18n.formatMessage({ id: "logLibraryManagement.copy" })}
+            </Button>
+          </div>
           {!selectedDatabase && (
             <span>
               {i18n.formatMessage({ id: "logLibraryManagement.create.hint" })}
@@ -445,6 +457,11 @@ const LogLibraryManagement = () => {
         />
       </div>
       <ModalCreatedLogLibrary onGetList={loadData} managementMode />
+      <ModalCopyLogLibrary
+        open={copyModalOpen}
+        onClose={() => setCopyModalOpen(false)}
+        onSuccess={loadData}
+      />
       <Drawer
         width={720}
         open={!!inspector}

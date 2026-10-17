@@ -6,4 +6,9 @@
   & > div:not(:last-child) {
     border-bottom: 1px solid hsla(0, 0%, 0%, 0.1);
   }
+
+  // 不换行模式下整表统一横向滚动，滚动条在列表底部
+  &.nowrapList {
+    overflow-x: auto;
+  }
 }

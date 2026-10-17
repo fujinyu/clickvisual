@@ -10,6 +10,7 @@ interface FoldLogStorageType {
   ascChecked?: boolean;
   rawLogChecked?: boolean;
   fieldPanelChecked?: boolean;
+  nowrapChecked?: boolean;
 }
 
 const PANE_STORAGE_KEY = "clickvisual-fold-log-flag";
@@ -21,6 +22,7 @@ export interface PanePrefsInput {
   ascChecked: boolean;
   rawLogChecked: boolean;
   fieldPanelChecked?: boolean;
+  nowrapChecked?: boolean;
 }
 
 const toPaneStorage = (pane: PanePrefsInput): FoldLogStorageType => ({
@@ -30,6 +32,7 @@ const toPaneStorage = (pane: PanePrefsInput): FoldLogStorageType => ({
   ascChecked: pane.ascChecked,
   rawLogChecked: pane.rawLogChecked,
   fieldPanelChecked: pane.fieldPanelChecked,
+  nowrapChecked: pane.nowrapChecked,
 });
 
 export enum LocalModuleType {
