@@ -198,7 +198,7 @@ const JsonStringValue = ({
 
   return (
     <>
-      {isExceed && (
+      {isExceed && !defaultExpanded && (
         <Button
           type="primary"
           className={jsonViewStyles.hiddenButton}

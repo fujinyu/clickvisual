@@ -56,7 +56,7 @@ const LogItemDetailsContent = (props: onInsertQuery) => {
 
   return (
     <>
-      {content?.length > LOGMAXTEXTLENGTH && (
+      {content?.length > LOGMAXTEXTLENGTH && !defaultExpanded && (
         <Button
           type="primary"
           style={{
