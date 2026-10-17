@@ -97,7 +97,8 @@
           word-break: normal;
 
           // JsonView 内部 .pre 用 pre-wrap，会让部分行重新换行，这里统一压成单行
-          span {
+          span,
+          pre {
             white-space: nowrap;
           }
         }
@@ -134,8 +135,14 @@
       margin-left: 4px;
       word-break: break-all;
 
-      // JsonView 的 .pre 自带 14px，会造成同行列表字号不一，统一跟随正文
-      span {
+      // JsonView 的 .pre 自带 14px（含 span/pre 两种标签），会造成同行列表字号不一，统一跟随正文
+      span,
+      pre {
+        font-size: inherit;
+      }
+
+      // 展开/收起 胶囊按钮默认 14px，压到与正文一致，避免行内字号忽大忽小
+      button {
         font-size: inherit;
       }
 
