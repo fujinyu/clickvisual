@@ -22,7 +22,7 @@ describe("v2 private-lite edition", () => {
   it("shows only query navigation", async () => {
     renderPrivateLiteRoute("/v2/query");
 
-    await screen.findByRole("heading", { name: "日志查询" });
+    await screen.findByRole("heading", { name: "Log query" });
     expect(screen.getByRole("link", { name: "日志查询" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "总览大盘" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "数据开发" })).not.toBeInTheDocument();
@@ -36,7 +36,7 @@ describe("v2 private-lite edition", () => {
   it("keeps the default page on query", async () => {
     renderPrivateLiteRoute("/v2");
 
-    expect(await screen.findByRole("heading", { name: "日志查询" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Log query" })).toBeInTheDocument();
   });
 
   it("renders the v2 login page and submits credentials", async () => {

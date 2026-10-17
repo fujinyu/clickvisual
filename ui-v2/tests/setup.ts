@@ -12,14 +12,22 @@ class TestResizeObserver {
   disconnect() {}
 }
 
-const originalElementQuerySelector = Element.prototype.querySelector;
-const originalElementQuerySelectorAll = Element.prototype.querySelectorAll;
+// Some suites opt into the node environment (@vitest-environment node), where
+// DOM globals do not exist; the patches below only apply in jsdom.
+const domAvailable = typeof window !== "undefined" && typeof Element !== "undefined";
+const capturedElementQuerySelector = domAvailable ? Element.prototype.querySelector : null;
+const capturedElementQuerySelectorAll = domAvailable ? Element.prototype.querySelectorAll : null;
 
 function isUnsupportedBrowserPseudoSelector(error: unknown, selector: string) {
   return error instanceof DOMException && selector.includes(":autofill");
 }
 
 beforeEach(() => {
+  if (!capturedElementQuerySelector || !capturedElementQuerySelectorAll) {
+    return;
+  }
+  const originalElementQuerySelector = capturedElementQuerySelector;
+  const originalElementQuerySelectorAll = capturedElementQuerySelectorAll;
   const queryFilterProfiles: Array<Record<string, unknown>> = [];
 
   Object.defineProperty(window, "matchMedia", {

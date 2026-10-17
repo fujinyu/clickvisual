@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   createReport,
@@ -220,7 +220,14 @@ export default function ReportSchedulePage() {
     }
   }
 
+  const loadedReportIdRef = useRef<number | null>(null);
+
   useEffect(() => {
+    // The route is written back from the active report, so that echo must not
+    // overwrite a report the user just picked in the same commit.
+    if (routeReportId !== null && routeReportId === loadedReportIdRef.current) {
+      return;
+    }
     setSelectedReportId(routeReportId);
   }, [routeReportId]);
 
@@ -237,7 +244,6 @@ export default function ReportSchedulePage() {
       setEditStatus("idle");
       setEditMessage(null);
       setConfigOpen(false);
-      setPendingReportAction(null);
       setPreviewStatus("idle");
       setPreviewMessage(null);
       setPreviewOpen(false);
@@ -253,6 +259,7 @@ export default function ReportSchedulePage() {
       try {
         const data = await getReportWorkspace(selectedReportId ?? undefined);
         if (!cancelled) {
+          loadedReportIdRef.current = data.activeReportId ?? null;
           setWorkspace(data);
         }
       } catch (error) {
@@ -272,6 +279,12 @@ export default function ReportSchedulePage() {
       }
     }
 
+    // Syncing the route from the workspace's active report re-sets selectedReportId
+    // to the report already on screen; reloading would close dialogs the user just
+    // opened in the same tick.
+    if (selectedReportId !== null && selectedReportId === loadedReportIdRef.current) {
+      return undefined;
+    }
     void load();
     return () => {
       cancelled = true;

@@ -113,7 +113,7 @@ describe("v2 version switcher", () => {
 
     render(<RouterProvider router={memoryRouter} />);
 
-    await screen.findByRole("heading", { name: "日志查询" });
+    await screen.findByRole("heading", { name: "Log query" });
     expect(window.localStorage.getItem(VERSION_STORAGE_KEY)).toBe("v2");
   });
 
@@ -166,7 +166,7 @@ describe("v2 version switcher", () => {
 
     render(<RouterProvider router={memoryRouter} />);
 
-    await screen.findByRole("heading", { name: "日志查询" });
+    await screen.findByRole("heading", { name: "Log query" });
 
     const link = screen.getByRole("link", { name: "切换到 v1" });
     expect(link).toHaveAttribute("href", "/console/query?ui=v1");

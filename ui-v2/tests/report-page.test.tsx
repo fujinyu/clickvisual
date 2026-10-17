@@ -450,10 +450,15 @@ describe("report schedule page", () => {
   });
 
   it("keeps current workspace when save succeeds but refresh fails", async () => {
-    vi.spyOn(reportApi, "getReportWorkspace")
-      .mockResolvedValueOnce(buildReportWorkspaceMock())
-      .mockResolvedValueOnce(buildReportWorkspaceMock())
-      .mockRejectedValueOnce(new Error("refresh unavailable"));
+    let failRefresh = false;
+    vi.spyOn(reportApi, "getReportWorkspace").mockImplementation(
+      async (reportId?: number) => {
+        if (failRefresh) {
+          throw new Error("refresh unavailable");
+        }
+        return buildReportWorkspaceMock(reportId ?? 1001);
+      }
+    );
     vi.spyOn(reportApi, "saveReportSchedule").mockResolvedValue({
       ...buildReportWorkspaceMock().schedule,
       cron: "0 */2 * * * *"
@@ -468,6 +473,7 @@ describe("report schedule page", () => {
     fireEvent.change(cronInput, {
       target: { value: "0 */2 * * * *" }
     });
+    failRefresh = true;
     fireEvent.click(
       await screen.findByRole("button", { name: "保存报表调度" })
     );

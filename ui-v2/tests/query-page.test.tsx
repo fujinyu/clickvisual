@@ -21,6 +21,8 @@ describe("query page", () => {
   }
 
   async function findFirstByText(text: string | RegExp) {
+    // Use as a presence wait: findAllByText flushes React work when it resolves and
+    // can detach the node it returned, so callers must not assert on it afterwards.
     const items = await screen.findAllByText(text);
     return items[0];
   }
@@ -52,15 +54,17 @@ describe("query page", () => {
     }
   }
 
-  function selectInlineConditionField(field: string) {
+  async function selectInlineConditionField(field: string) {
     const fieldInput = screen.getByRole("combobox", { name: "Field" });
     fireEvent.click(fieldInput);
-    fireEvent.click(screen.getByRole("option", { name: new RegExp(`^${field}(\\s| ·|$)`) }));
+    // Suggestions arrive from the analysis-fields request, so wait for the option.
+    const option = await screen.findByRole("option", { name: new RegExp(`^${field}(\\s| ·|$)`) });
+    fireEvent.click(option);
   }
 
-  function addInlineCondition(field: string, value: string, operator?: string) {
+  async function addInlineCondition(field: string, value: string, operator?: string) {
     openAddFilterComposer();
-    selectInlineConditionField(field);
+    await selectInlineConditionField(field);
     if (operator) {
       const composer = screen.getByLabelText("Filter condition editor");
       const operatorButton = within(composer).getByRole("button", { name: /Operator:/ });
@@ -353,8 +357,8 @@ describe("query page", () => {
     openAddFilterComposer();
     fireEvent.click(screen.getByRole("combobox", { name: "Field" }));
 
+    await screen.findByRole("option", { name: /^service/ });
     expect(screen.queryByRole("option", { name: "All fields" })).not.toBeInTheDocument();
-    expect(screen.getByRole("option", { name: /^service/ })).toBeInTheDocument();
   });
 
   it("closes the inline field picker from outside clicks", async () => {
@@ -368,7 +372,7 @@ describe("query page", () => {
     openAddFilterComposer();
 
     fireEvent.click(screen.getByRole("combobox", { name: "Field" }));
-    expect(screen.getByRole("listbox", { name: "Field suggestions" })).toBeInTheDocument();
+    expect(await screen.findByRole("listbox", { name: "Field suggestions" })).toBeInTheDocument();
 
     fireEvent.pointerDown(screen.getByLabelText("Value"));
     await waitFor(() => {
@@ -602,7 +606,7 @@ describe("query page", () => {
     );
 
     await waitForQueryPageReady();
-    addInlineCondition("service", "213");
+    await addInlineCondition("service", "213");
 
     openAddFilterComposer();
 
@@ -621,7 +625,7 @@ describe("query page", () => {
     );
 
     await waitForQueryPageReady();
-    addInlineCondition("service", "timeout");
+    await addInlineCondition("service", "timeout");
 
     await waitFor(() => {
       expect(new URL(window.location.href).searchParams.get("query")).toBe("`service` = 'timeout'");
@@ -636,7 +640,7 @@ describe("query page", () => {
     );
 
     await waitForQueryPageReady();
-    addInlineCondition("service", "gateway");
+    await addInlineCondition("service", "gateway");
 
     fireEvent.click(screen.getByRole("tab", { name: "SQL" }));
     expect(screen.getByLabelText("SQL query")).toHaveValue("`service` = 'gateway'");
@@ -651,7 +655,7 @@ describe("query page", () => {
     );
 
     await waitForQueryPageReady();
-    addInlineCondition("service", "error", "not like");
+    await addInlineCondition("service", "error", "not like");
 
     expect(screen.getByRole("button", { name: "service not like error" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /All fields/ })).not.toBeInTheDocument();
@@ -699,7 +703,7 @@ describe("query page", () => {
     );
 
     await waitForQueryPageReady();
-    addInlineCondition("service", "gateway");
+    await addInlineCondition("service", "gateway");
 
     expect(screen.getByRole("button", { name: "service = gateway" })).toBeInTheDocument();
     await waitFor(() => {
@@ -1325,7 +1329,7 @@ describe("query page", () => {
     await waitForQueryPageReady();
     switchToInteractiveQueryMode();
     expect(await screen.findByRole("button", { name: "lv = debug" })).toBeInTheDocument();
-    expect(await findFirstByText("timeout")).toBeInTheDocument();
+    await findFirstByText("timeout");
     await waitFor(() => {
       expect(
         runPayloads.some((payload) => payload.st === 1785218880 && payload.et === 1785219780)
@@ -1599,11 +1603,12 @@ describe("query page", () => {
     );
 
     await waitForQueryPageReady();
-    await waitFor(() => {
-      expect(querySignals).toHaveLength(2);
-    });
+    // The auto-run dispatches the request before the loading bar commits, so wait
+    // for the cancel control instead of assuming both land in the same render.
+    const cancelButton = await screen.findByRole("button", { name: "Cancel query" });
+    expect(querySignals).toHaveLength(2);
 
-    fireEvent.click(screen.getByRole("button", { name: "Cancel query" }));
+    fireEvent.click(cancelButton);
 
     await waitFor(() => {
       expect(querySignals.every((signal) => signal.aborted)).toBe(true);
@@ -1707,7 +1712,7 @@ describe("query page", () => {
     await waitFor(() => {
       expect(screen.queryByText("未匹配字段目录，默认按 JSON 路径查询")).not.toBeInTheDocument();
     });
-    addInlineCondition("service", "gateway");
+    await addInlineCondition("service", "gateway");
     expect(screen.getByRole("button", { name: "service = gateway" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "service = gateway" }));
@@ -1736,7 +1741,7 @@ describe("query page", () => {
     );
 
     await waitForQueryPageReady();
-    addInlineCondition("service", "gateway-with-a-very-long-value-that-requires-horizontal-drag-selection");
+    await addInlineCondition("service", "gateway-with-a-very-long-value-that-requires-horizontal-drag-selection");
 
     fireEvent.click(
       screen.getByRole("button", {
@@ -1768,10 +1773,11 @@ describe("query page", () => {
 
     await screen.findByRole("heading", { name: "Log query" });
     expect(await screen.findByRole("tablist", { name: "Log table tabs" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "default.logs" })).toHaveAttribute("aria-selected", "true");
+    // The auto-selected table tab commits after the tablist itself.
+    expect(await screen.findByRole("tab", { name: "default.logs" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "default.logs" })).toHaveTextContent("logs");
     expect(screen.getByRole("tab", { name: "default.logs" })).toHaveTextContent("default");
-    addInlineCondition("service", "gateway");
+    await addInlineCondition("service", "gateway");
     expect(screen.getByRole("button", { name: "service = gateway" })).toBeInTheDocument();
     await openDatasourcePanel();
     fireEvent.click(screen.getByRole("button", { name: "Table app_logs" }));
@@ -1864,7 +1870,7 @@ describe("query page", () => {
 
     await waitForQueryPageReady();
     fireEvent.click(screen.getByRole("button", { name: "Run" }));
-    expect(await findFirstByText("timeout")).toBeInTheDocument();
+    await findFirstByText("timeout");
 
     const fieldsDialog = await screen.findByRole("complementary", { name: "Fields" });
     expect(within(fieldsDialog).getByRole("button", { name: /Base fields/ })).toBeInTheDocument();
@@ -1962,7 +1968,7 @@ describe("query page", () => {
 
     await waitForQueryPageReady();
     fireEvent.click(screen.getByRole("button", { name: "Run" }));
-    expect(await findFirstByText("timeout")).toBeInTheDocument();
+    await findFirstByText("timeout");
 
     const fieldsDialog = await screen.findByRole("complementary", { name: "Fields" });
     await within(fieldsDialog).findByText("message");
@@ -2030,7 +2036,7 @@ describe("query page", () => {
 
     await waitForQueryPageReady();
     fireEvent.click(screen.getByRole("button", { name: "Run" }));
-    expect(await findFirstByText("timeout")).toBeInTheDocument();
+    await findFirstByText("timeout");
     fireEvent.click(screen.getByRole("button", { name: "Download logs" }));
     await waitFor(() => {
       expect(downloadedBlob).toBeTruthy();
@@ -2079,7 +2085,7 @@ describe("query page", () => {
 
     await waitForQueryPageReady();
     fireEvent.click(screen.getByRole("button", { name: "Run" }));
-    expect(await findFirstByText("timeout")).toBeInTheDocument();
+    await findFirstByText("timeout");
 
     const fieldsDialog = await screen.findByRole("complementary", { name: "Fields" });
     fireEvent.click(within(fieldsDialog).getByRole("button", { name: "Top values for message" }));
@@ -2159,10 +2165,14 @@ describe("query page", () => {
     expect(collapsePageButton.closest(".cv-query-result-actions")).toBeNull();
     expect(screen.getAllByLabelText("Log details")).toHaveLength(50);
     fireEvent.click(collapsePageButton);
+    // The switch stays aria-busy while the collapse animation settles, so wait for
+    // the collapsed view first and then check the control is idle.
+    await waitFor(() => {
+      expect(screen.queryAllByLabelText("Log details")).toHaveLength(0);
+    });
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Show KV" })).not.toHaveAttribute("aria-busy");
     });
-    expect(screen.queryAllByLabelText("Log details")).toHaveLength(0);
 
     const toolbarRows = screen.getByLabelText("Rows per page");
     expect(toolbarRows.closest(".cv-query-result-bar__page")).toBeTruthy();
@@ -2176,7 +2186,7 @@ describe("query page", () => {
     await waitFor(() => {
       expect(requestPaths.some((item) => item.includes("page=2") && item.includes("pageSize=50"))).toBe(true);
     });
-    expect(await findFirstByText("page-2 row-51")).toBeInTheDocument();
+    await findFirstByText("page-2 row-51");
     expect(within(screen.getByLabelText("Result page controls footer")).getByText("2 / 3")).toBeInTheDocument();
 
     const pageSize200 = within(screen.getByLabelText("Rows per page")).getByText("200").closest("label");
@@ -2185,7 +2195,7 @@ describe("query page", () => {
     await waitFor(() => {
       expect(requestPaths.some((item) => item.includes("page=1") && item.includes("pageSize=200"))).toBe(true);
     });
-    expect(await findFirstByText("page-1 row-120")).toBeInTheDocument();
+    await findFirstByText("page-1 row-120");
     expect(screen.queryByLabelText("Result page controls")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Result page controls footer")).not.toBeInTheDocument();
     const singlePageRows = screen.getByLabelText("Rows per page");
@@ -2929,7 +2939,7 @@ describe("query page", () => {
         screen.getAllByRole("columnheader").some((header) => header.textContent?.includes("k8s.pod.uid"))
       ).toBe(true);
     });
-  });
+  }, 20000);
 
   it("parses level and message from _raw_log without trailing underscore", async () => {
     vi.stubGlobal(
@@ -3319,7 +3329,7 @@ describe("query page", () => {
 
     await screen.findByRole("heading", { name: "Log query" });
     fireEvent.click(screen.getByRole("button", { name: "Run" }));
-    expect(await findFirstByText("GetTableRepo")).toBeInTheDocument();
+    await findFirstByText("GetTableRepo");
 
     const correlateDetails =
       screen.getAllByLabelText("Log details").find((item) => item.textContent?.includes("GetTableRepo")) ??

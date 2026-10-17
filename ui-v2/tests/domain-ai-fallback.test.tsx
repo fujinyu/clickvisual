@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import { routes } from "../src/app/router";
@@ -44,7 +44,7 @@ describe("v2 domain ai actions and fallback readiness", () => {
   it("keeps query actions, tabs and trace hooks ready for t9 acceptance", async () => {
     renderRoute("/v2/query");
 
-    const pageHeading = await screen.findByRole("heading", { name: "日志查询" });
+    const pageHeading = await screen.findByRole("heading", { name: "Log query" });
     const pageSection = pageHeading.closest("section");
     expect(pageSection).not.toBeNull();
     if (!pageSection) {
@@ -52,13 +52,24 @@ describe("v2 domain ai actions and fallback readiness", () => {
     }
 
     const scoped = within(pageSection);
-    expect(scoped.getByRole("button", { name: /执行查询|查询中/ })).toBeInTheDocument();
-    expect(scoped.getByRole("button", { name: "收藏查询" })).toBeInTheDocument();
-    expect(scoped.getByRole("button", { name: "新增条件" })).toBeInTheDocument();
-    expect(scoped.getByRole("button", { name: "分享" })).toBeInTheDocument();
-    expect(scoped.getByRole("button", { name: "日志表 logs" })).toBeInTheDocument();
-    expect(scoped.getByRole("button", { name: "日志表 app_logs" })).toBeInTheDocument();
-    expect(scoped.getByRole("button", { name: "列配置" })).toBeInTheDocument();
+    expect(await screen.findByRole("tablist", { name: "Log table tabs" })).toBeInTheDocument();
+    expect(scoped.getByRole("button", { name: "Run" })).toBeInTheDocument();
+    expect(scoped.getByRole("button", { name: "Favorite" })).toBeInTheDocument();
+    // The filter-condition editor only renders in Builder mode; SQL is the default.
+    fireEvent.click(scoped.getByRole("tab", { name: "Builder" }));
+    expect(scoped.getByRole("button", { name: "Add condition" })).toBeInTheDocument();
+    expect(scoped.getByRole("button", { name: "Share" })).toBeInTheDocument();
+    // The Fields sidebar only mounts once results land; the empty workspace keeps
+    // its three regions.
+    expect(scoped.getByRole("region", { name: "Query input" })).toBeInTheDocument();
+    expect(scoped.getByRole("region", { name: "Histogram" })).toBeInTheDocument();
+    expect(scoped.getByRole("region", { name: "Query results" })).toBeInTheDocument();
+    fireEvent.click(scoped.getByRole("button", { name: "Sources" }));
+    const tree = await screen.findByRole("tree", {
+      name: "Instances, databases, and log tables"
+    });
+    expect(within(tree).getByRole("button", { name: "Table logs" })).toBeInTheDocument();
+    expect(within(tree).getByRole("button", { name: "Table app_logs" })).toBeInTheDocument();
     expectNoGenericFallbackState();
   });
 

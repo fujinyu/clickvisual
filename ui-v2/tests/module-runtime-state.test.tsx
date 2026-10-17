@@ -28,9 +28,8 @@ describe("v2 module runtime states", () => {
 
     render(<RouterProvider router={memoryRouter} />);
 
-    expect(await screen.findByRole("heading", { name: "日志查询" })).toBeInTheDocument();
-    expect(screen.getByLabelText("查询上下文")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "筛选" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Log query" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Query input" })).toBeInTheDocument();
   });
 
   it("shows AI failure feedback on alert route without removing rule list", async () => {

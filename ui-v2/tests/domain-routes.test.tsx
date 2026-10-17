@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import { routes } from "../src/app/router";
@@ -37,13 +37,15 @@ describe("v2 domain routes", () => {
 
     render(<RouterProvider router={memoryRouter} />);
 
-    expect(await screen.findByRole("heading", { name: "日志查询" })).toBeInTheDocument();
-    expect(screen.getByLabelText("查询上下文")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "筛选" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "时间分布" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "查询结果" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "新增条件" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /执行查询|查询中/ })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Log query" })).toBeInTheDocument();
+    expect(await screen.findByRole("tablist", { name: "Log table tabs" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Query input" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Histogram" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Query results" })).toBeInTheDocument();
+    // The filter-condition editor only renders in Builder mode; SQL is the default.
+    fireEvent.click(screen.getByRole("tab", { name: "Builder" }));
+    expect(screen.getByRole("button", { name: "Add condition" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run" })).toBeInTheDocument();
   });
 
   it("renders the report display route with landed result data", async () => {

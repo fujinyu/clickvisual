@@ -36,7 +36,7 @@ describe("v2 shared shell", () => {
       screen.queryByTestId("shell-time-range-switcher")
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /前往 v1|返回上次使用的 v1/ })
+      screen.getByRole("link", { name: "切换到 v1" })
     ).toBeInTheDocument();
     expect(
       await screen.findByRole("heading", { name: "报表配置" })
