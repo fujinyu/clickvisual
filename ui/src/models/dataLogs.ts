@@ -4,7 +4,7 @@ import {
   FIFTEEN_TIME,
   FIRST_PAGE,
   MINUTES_UNIT_TIME,
-  PAGE_SIZE,
+  LOG_PAGE_SIZE,
   QueryTypeEnum,
   TimeRangeType,
 } from "@/config/config";
@@ -67,7 +67,7 @@ const DataLogsModel = () => {
   const [orderBy, setOrderBy] = useState<string>();
   // 分页参数
 
-  const [pageSize, setPageSize] = useState<number>(10);
+  const [pageSize, setPageSize] = useState<number>(LOG_PAGE_SIZE);
   const [currentPage, setCurrentPage] = useState<number>();
 
   // 日志库列表
@@ -782,7 +782,7 @@ const DataLogsModel = () => {
     onChangeStartDateTime(
       dayjs().subtract(FIFTEEN_TIME, MINUTES_UNIT_TIME).unix()
     );
-    onChangeLogsPage(FIRST_PAGE, PAGE_SIZE);
+    onChangeLogsPage(FIRST_PAGE, LOG_PAGE_SIZE);
     onChangeKeywordInput(undefined);
     onChangeActiveTabKey(TimeRangeType.Relative);
     onChangeActiveTimeOptionIndex(ACTIVE_TIME_INDEX);

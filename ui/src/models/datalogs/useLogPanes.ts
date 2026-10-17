@@ -4,7 +4,7 @@ import {
   FIFTEEN_TIME,
   FIRST_PAGE,
   MINUTES_UNIT_TIME,
-  PAGE_SIZE,
+  LOG_PAGE_SIZE,
   TimeRangeType,
 } from "@/config/config";
 import { currentTimeStamp } from "@/utils/momentUtils";
@@ -16,7 +16,7 @@ export const DefaultPane = {
   start: moment().subtract(FIFTEEN_TIME, MINUTES_UNIT_TIME).unix(),
   end: currentTimeStamp(),
   page: FIRST_PAGE,
-  pageSize: PAGE_SIZE,
+  pageSize: LOG_PAGE_SIZE,
   keyword: undefined,
   activeIndex: ACTIVE_TIME_INDEX,
   activeTabKey: TimeRangeType.Relative,

@@ -4,7 +4,7 @@ import {
   FIFTEEN_TIME,
   FIRST_PAGE,
   MINUTES_UNIT_TIME,
-  PAGE_SIZE,
+  LOG_PAGE_SIZE,
   QueryTypeEnum,
   TimeRangeType,
 } from "@/config/config";
@@ -74,7 +74,7 @@ export default function useLogUrlParams() {
     start: dayjs().subtract(FIFTEEN_TIME, MINUTES_UNIT_TIME).unix(),
     end: currentTimeStamp(),
     page: FIRST_PAGE,
-    size: PAGE_SIZE,
+    size: LOG_PAGE_SIZE,
     tab: TimeRangeType.Relative,
     index: ACTIVE_TIME_INDEX,
     queryType: QueryTypeEnum.LOG,
@@ -179,7 +179,9 @@ export default function useLogUrlParams() {
       end: endTime || parseInt(isTid ? urlState.end : lastDataLogsState.end),
       keyword: isTid ? urlState.kw : lastDataLogsState.kw,
       page: parseInt(isTid ? urlState.page : lastDataLogsState.page),
-      pageSize: parseInt(isTid ? urlState.size : lastDataLogsState.size),
+      pageSize:
+        parseInt(isTid ? urlState.size : lastDataLogsState.size) ||
+        LOG_PAGE_SIZE,
       activeTabKey: isTid ? urlState.tab : lastDataLogsState.tab,
       activeIndex: parseInt(isTid ? urlState.index : lastDataLogsState.index),
       queryType: isTid ? urlState.queryType : lastDataLogsState.queryType,
@@ -304,7 +306,7 @@ export default function useLogUrlParams() {
       kw: undefined,
       page: undefined,
       queryType: QueryTypeEnum.LOG,
-      size: 10,
+      size: LOG_PAGE_SIZE,
       start: undefined,
       tab: TimeRangeType.Relative,
       tid: undefined,

@@ -4,6 +4,8 @@
 export const FIRST_PAGE = 1;
 // 分页参数：pageSize
 export const PAGE_SIZE = 10;
+// 日志查询分页默认条数
+export const LOG_PAGE_SIZE = 50;
 
 // 时间组件：activeKey
 export enum TimeRangeType {
