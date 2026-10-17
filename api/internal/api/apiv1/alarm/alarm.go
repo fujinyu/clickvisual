@@ -246,7 +246,7 @@ func List(c *core.Context) {
 			c.JSONE(1, "", constx.ErrPmsCheck)
 			return
 		}
-		// (replace(replace(JSON_EXTRACT(`cv_alarm`.`table_ids`, '$[*]'),'[',''),']',''))
+		// CONCAT(',', REPLACE(REPLACE(REPLACE(`cv_alarm`.`table_ids`, '[', ''), ']', ''), ' ', ''), ',') LIKE CONCAT('%,', cv_base_table.id, ',%')
 		query[db2.TableNameBaseTable+".did"] = did
 		total, list = db2.AlarmListByDidPage(query, req)
 	} else if iid != 0 {
@@ -279,7 +279,7 @@ func List(c *core.Context) {
 			// If you are not an administrator, get a list of instances that have permission
 			tidArr = service.ReadAllPermissionTable(c.Uid())
 		}
-		// SELECT *  FROM `cv_alarm` WHERE JSON_CONTAINS(`table_ids`, '[1]') OR JSON_CONTAINS(`table_ids`, '[7]')
+		// table_ids is matched as a comma-delimited text list, see db.alarmTidArrCond
 		total, list = db2.AlarmListPageByTidArr(query, req, tidArr)
 	}
 	c.JSONPage(service.AlarmAttachInfo(list), core.Pagination{

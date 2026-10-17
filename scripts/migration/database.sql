@@ -95,14 +95,14 @@ CREATE TABLE IF NOT EXISTS `cv_query_filter_profile` (
   `table_name` varchar(255) NOT NULL,
   `start_time` datetime NOT NULL,
   `end_time` datetime NOT NULL,
-  `conditions_json` json NOT NULL,
+  `conditions_json` text NOT NULL,
   `creator` varchar(128) NOT NULL,
   `updater` varchar(128) NOT NULL,
   `ctime` bigint DEFAULT NULL COMMENT '创建时间',
   `utime` bigint DEFAULT NULL COMMENT '更新时间',
   `dtime` bigint DEFAULT 0 COMMENT '删除时间',
   PRIMARY KEY (`id`),
-  KEY `idx_query_filter_scope` (`instance_id`,`database_name`,`table_name`),
+  KEY `idx_query_filter_scope` (`instance_id`,`database_name`(191),`table_name`(191)),
   KEY `idx_query_filter_creator_name` (`creator`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

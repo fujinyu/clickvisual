@@ -1,0 +1,145 @@
+[app]
+isMultiCopy = true  # multi-copy mode: Redis must be configured, otherwise the service cannot start
+# v2 edition: full keeps all v2 modules; private-lite keeps only log query related v2 modules.
+v2Edition = "full" # full | private-lite
+secretKey = "secretKey"
+rootURL = "http://localhost:9001"
+baseURL = "/api/admin/login/"
+permissionFile = './config/resource.yaml'
+serveFromSubPath = false
+encryptionKey= "00112233445566778899aabbccddeeff"
+
+[casbin.rule]
+path = "./config/rbac.conf"
+
+[server.http]
+# HTTP server Host
+host = "0.0.0.0"
+# HTTP server Port
+port = 9001
+embedPath = "dist"
+maxAge = 86400
+
+[logger]
+# log level, available level: "debug", "info", "warn", "error", "panic", "fatal"
+level = "info"
+writer = "stderr"
+name = "clickvisual.log"
+debug = true
+
+[report.summary.ai]
+enabled = false
+baseURL = "https://api.openai.com"
+apiKey = ""
+model = ""
+timeout = 5
+maxRows = 5
+
+[report.aggregation]
+# Extend the default pre-aggregation whitelist without modifying code.
+allowedFields = []
+allowedGroupByFields = []
+
+# metadata database. Defaults to [mysql] when driver/dsn is not configured.
+[metadata]
+driver = "mysql" # mysql sqlite
+dsn = ""
+debug = true
+
+# if isMultiCopy is true
+[redis]
+debug = false
+writeTimeout = "3s"
+# 正式
+#db = 10
+#addr = "r-bp19a6f117d96e84.redis.rds.aliyuncs.com:6379"
+#password = "VFBAmtMnOoG6GLqz"
+# 本地
+db = 10
+addr = "127.0.0.1:6379"
+password = "123456"
+
+[mysql]
+debug = true
+# metadata database attach retry interval when MySQL or schema is not ready during startup.
+attachRetryInterval = "5s"
+# database DSN
+#dsn = "root:123456@tcp(127.0.0.1:33306)/clickvisual?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&readTimeout=1s&timeout=1s&writeTimeout=3s"
+#dsn = "ilogtail:JzFtX4Jtbvm4Tk^a@tcp(172.16.128.54:3306)/clickvisual?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&readTimeout=1s&timeout=1s&writeTimeout=3s"
+#dsn = "ilogtail:JzFtX4Jtbvm4Tk^a@tcp(pc-bp114j3us45drbcat.rwlb.rds.aliyuncs.com:3306)/clickvisual?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&readTimeout=1s&timeout=1s&writeTimeout=3s"
+dsn = "ilogtail_test:OyO&e&WLl@!Tz##z@tcp(pc-bp18y89n3vs0mmz2g.rwlb.rds.aliyuncs.com:3306)/clickvisual_test?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&readTimeout=1s&timeout=1s&writeTimeout=3s"
+
+# log level
+level = "debug"
+# maximum number of connections in the idle connection pool for database
+maxIdleConns = 5
+# maximum number of open connections for database
+maxOpenConns = 10
+# maximum amount of time a connection
+connMaxLifetime = "300s"
+
+[auth]
+mode = "redis" # redis memstore
+name = "clickvisual_session"
+debug = true
+Keypairs = "secret"
+# if use mode redis
+redisSize = 10
+redisNetwork = "tcp"
+# 正式
+#redisDb = "10"
+#redisAddr = "r-bp19a6f117d96e84.redis.rds.aliyuncs.com:6379"
+#redisPassword = "VFBAmtMnOoG6GLqz"
+redisDb = "10"
+redisAddr = "127.0.0.1:6379"
+redisPassword = "123456"
+
+[auth.anonymous]
+# enable anonymous access
+enabled = false
+
+[auth.proxy]
+enabled = false
+isAutoLogin = false
+headerName = "X-CLICKVISUAL-USER"
+headerNickName = "X-CLICKVISUAL-NICKNAME"
+rootTokenKey = "X-CLICKVISUAL-TOKEN"
+rootTokenValue = "xxx"
+
+[[auth.tps]]
+typ = "github"
+enable = true
+clientId = ""
+clientSecret = ""
+allowSignUp = true
+scopes = ["user:email", "read:org"]
+authUrl = "https://github.com/login/oauth/authorize"
+tokenUrl = "https://github.com/login/oauth/access_token"
+apiUrl = "https://api.github.com/user"
+allowedDomains = []
+teamIds = []
+allowedOrganizations = []
+
+[[auth.tps]]
+typ = "gitlab"
+enable = true
+clientId = ""
+clientSecret = ""
+allowSignUp = true
+scopes = ["api"]
+authUrl = "https://gitlab.com/oauth/authorize"
+tokenUrl = "https://gitlab.com/oauth/token"
+apiUrl = "https://gitlab.com/api/v4"
+allowedDomains = []
+teamIds = []
+allowedOrganizations = []
+
+[prom2click]
+enable = true
+
+[[prom2click.cfgs]]
+host = "127.0.0.1"
+port = 9222
+clickhouseDSN = "tcp://127.0.0.1:9000"
+clickhouseDB = "metrics"
+clickhouseTable = "samples"

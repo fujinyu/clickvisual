@@ -448,8 +448,8 @@ CREATE TABLE IF NOT EXISTS `cv_pms_custom_role` (
     `refer_id` bigint NOT NULL DEFAULT 0 COMMENT '所属资源类型的对应资源id',
     `role_name` varchar(50) NOT NULL DEFAULT '' COMMENT '所属对应资源的角色名称',
     `description` varchar(255) NOT NULL DEFAULT '' COMMENT '对角色的中文描述',
-    `sub_resources` json NOT NULL COMMENT '角色所属refer_id资源的子资源列表',
-    `acts` json NOT NULL COMMENT '对资源列表中各资源的actions',
+    `sub_resources` text NOT NULL COMMENT '角色所属refer_id资源的子资源列表',
+    `acts` text NOT NULL COMMENT '对资源列表中各资源的actions',
     `updated_by` bigint NOT NULL DEFAULT '0' COMMENT '最近一次对记录做更新的用户id',
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci;
@@ -462,8 +462,8 @@ CREATE TABLE IF NOT EXISTS `cv_pms_default_role` (
     `belong_type` varchar(50) NOT NULL DEFAULT '' COMMENT '所属资源类型,如''app''',
     `role_name` varchar(50) NOT NULL DEFAULT '' COMMENT '所属资源的角色名称',
     `description` varchar(255) NOT NULL DEFAULT '' COMMENT '对角色的中文描述',
-    `sub_resources` json NOT NULL COMMENT '角色所属belongType资源下的子资源列表',
-    `acts` json NOT NULL COMMENT '对资源列表中各资源的actions',
+    `sub_resources` text NOT NULL COMMENT '角色所属belongType资源下的子资源列表',
+    `acts` text NOT NULL COMMENT '对资源列表中各资源的actions',
     `updated_by` int NOT NULL DEFAULT '0' COMMENT '最近一次对记录做更新的用户id',
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci;
@@ -487,8 +487,8 @@ CREATE TABLE IF NOT EXISTS `cv_pms_role_detail` (
     `utime` bigint DEFAULT NULL COMMENT '更新时间',
     `dtime` bigint unsigned DEFAULT NULL COMMENT '删除时间',
     `pms_role_id` bigint NOT NULL DEFAULT 0 COMMENT '所属pmsRole的id',
-    `sub_resources` json NOT NULL COMMENT '授权目标资源的子资源列表',
-    `acts` json NOT NULL COMMENT '准许动作列表',
+    `sub_resources` text NOT NULL COMMENT '授权目标资源的子资源列表',
+    `acts` text NOT NULL COMMENT '准许动作列表',
     `rule_tpl` text NOT NULL COMMENT '规则模板,用于生成casbin中的p类型规则',
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci;

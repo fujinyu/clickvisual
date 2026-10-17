@@ -354,17 +354,34 @@ func AlarmList(conds egorm.Conds) (resp []*Alarm, err error) {
 	return
 }
 
-func AlarmListByTidArr(conds egorm.Conds, tidArr []int) (resp []*Alarm, err error) {
-	jcs := ""
+// alarmTidListExpr turns table_ids, a JSON int array stored as plain text such as "[1,7]",
+// into the comma-delimited list "1,7".
+func alarmTidListExpr(column string) string {
+	return fmt.Sprintf("REPLACE(REPLACE(REPLACE(%s, '[', ''), ']', ''), ' ', '')", column)
+}
+
+// alarmTidArrCond builds the "table_ids contains any tid of tidArr" condition.
+// MySQL 5.6 has neither the JSON type nor JSON_CONTAINS/JSON_EXTRACT, so membership is tested
+// on the comma-delimited form by wrapping it with commas and matching ",<tid>,".
+func alarmTidArrCond(tidArr []int) (string, []interface{}) {
+	like := fmt.Sprintf("CONCAT(',', %s, ',') LIKE ?", alarmTidListExpr("`table_ids`"))
+	cond := ""
+	binds := make([]interface{}, 0, len(tidArr))
 	for _, tid := range tidArr {
-		if jcs == "" {
-			jcs = fmt.Sprintf("JSON_CONTAINS(`table_ids`, '[%d]')", tid)
-			continue
+		if cond == "" {
+			cond = like
+		} else {
+			cond = cond + " OR " + like
 		}
-		jcs = fmt.Sprintf("%s OR JSON_CONTAINS(`table_ids`, '[%d]')", jcs, tid)
+		binds = append(binds, fmt.Sprintf("%%,%d,%%", tid))
 	}
+	return cond, binds
+}
+
+func AlarmListByTidArr(conds egorm.Conds, tidArr []int) (resp []*Alarm, err error) {
+	jcs, jbinds := alarmTidArrCond(tidArr)
 	sql, binds := egorm.BuildQuery(conds)
-	if err = invoker.Db.Model(Alarm{}).Preload("User").Where(sql, binds...).Where(jcs).Find(&resp).Error; err != nil {
+	if err = invoker.Db.Model(Alarm{}).Preload("User").Where(sql, binds...).Where(jcs, jbinds...).Find(&resp).Error; err != nil {
 		err = errors.Wrapf(err, "conds: %v", conds)
 		return
 	}
@@ -372,7 +389,8 @@ func AlarmListByTidArr(conds egorm.Conds, tidArr []int) (resp []*Alarm, err erro
 }
 
 // AlarmListPageByTidArr return item list by pagination
-// SELECT *  FROM `cv_alarm` WHERE JSON_CONTAINS(`table_ids`, '[1]') OR JSON_CONTAINS(`table_ids`, '[7]')
+// SELECT * FROM `cv_alarm` WHERE CONCAT(',', REPLACE(REPLACE(REPLACE(`table_ids`, '[', ''), ']', ''), ' ', ''), ',') LIKE '%,1,%'
+// OR CONCAT(',', REPLACE(REPLACE(REPLACE(`table_ids`, '[', ''), ']', ''), ' ', ''), ',') LIKE '%,7,%'
 func AlarmListPageByTidArr(conds egorm.Conds, reqList *ReqPage, tidArr []int) (total int64, respList []*Alarm) {
 	respList = make([]*Alarm, 0)
 	if reqList.PageSize == 0 {
@@ -381,19 +399,17 @@ func AlarmListPageByTidArr(conds egorm.Conds, reqList *ReqPage, tidArr []int) (t
 	if reqList.Current == 0 {
 		reqList.Current = 1
 	}
-	jcs := ""
-	for _, tid := range tidArr {
-		if jcs == "" {
-			jcs = fmt.Sprintf("JSON_CONTAINS(`table_ids`, '[%d]')", tid)
-			continue
-		}
-		jcs = fmt.Sprintf("%s OR JSON_CONTAINS(`table_ids`, '[%d]')", jcs, tid)
-	}
+	jcs, jbinds := alarmTidArrCond(tidArr)
 	sql, binds := egorm.BuildQuery(conds)
-	db := invoker.Db.Model(Alarm{}).Preload("User").Where(jcs).Where(sql, binds...).Order("id desc")
+	db := invoker.Db.Model(Alarm{}).Preload("User").Where(jcs, jbinds...).Where(sql, binds...).Order("id desc")
 	db.Count(&total)
 	db.Offset((reqList.Current - 1) * reqList.PageSize).Limit(reqList.PageSize).Find(&respList)
 	return
+}
+
+// alarmDidTableJoinCond joins the base table whose id appears in table_ids.
+func alarmDidTableJoinCond() string {
+	return fmt.Sprintf("JOIN cv_base_table ON CONCAT(',', %s, ',') LIKE CONCAT('%%,', cv_base_table.id, ',%%')", alarmTidListExpr("`cv_alarm`.`table_ids`"))
 }
 
 func AlarmListByDidPage(conds egorm.Conds, reqList *ReqPage) (total int64, respList []*Alarm) {
@@ -405,7 +421,7 @@ func AlarmListByDidPage(conds egorm.Conds, reqList *ReqPage) (total int64, respL
 		reqList.Current = 1
 	}
 	sql, binds := egorm.BuildQuery(conds)
-	db := invoker.Db.Select("cv_alarm.id").Model(Alarm{}).Preload("User").Joins("JOIN cv_base_table ON cv_base_table.id IN (replace(replace(JSON_EXTRACT(`cv_alarm`.`table_ids`, '$[*]'),'[',''),']',''))").Where(sql, binds...)
+	db := invoker.Db.Select("cv_alarm.id").Model(Alarm{}).Preload("User").Joins(alarmDidTableJoinCond()).Where(sql, binds...)
 	db.Count(&total).Order("id desc")
 	db.Offset((reqList.Current - 1) * reqList.PageSize).Limit(reqList.PageSize).Find(&respList)
 	return

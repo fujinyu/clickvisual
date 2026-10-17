@@ -56,8 +56,8 @@ type PmsRoleDetail struct {
 	BaseModel
 
 	PmsRoleId    int     `gorm:"type:int(11);not null;column:pms_role_id;comment:所属pmsRole的id" json:"pmsRoleId"`
-	SubResources Strings `gorm:"not null;type:json;column:sub_resources;comment:授权目标资源的子资源列表" json:"subResources"`
-	Acts         Strings `gorm:"not null;type:json;column:acts;comment:准许动作列表" json:"acts"`
+	SubResources Strings `gorm:"not null;type:text;column:sub_resources;comment:授权目标资源的子资源列表" json:"subResources"`
+	Acts         Strings `gorm:"not null;type:text;column:acts;comment:准许动作列表" json:"acts"`
 	RuleTpl      string  `gorm:"not null;type:text;column:rule_tpl;comment:规则模板,用于生成casbin中的p类型规则" json:"-"`
 }
 
@@ -376,8 +376,8 @@ type PmsDefaultRole struct {
 	BelongType   string  `gorm:"column:belong_type;not null;size:50;comment:所属资源类型,如'app'" json:"belongType"`
 	RoleName     string  `gorm:"column:role_name;not null;size:50;comment:所属资源的角色名称" json:"roleName"`
 	Description  string  `gorm:"column:description;not null;size:255;default:'';comment:对角色的中文描述" json:"description"`
-	SubResources Strings `gorm:"column:sub_resources;not null;type:json;comment:角色所属belongType资源下的子资源列表" json:"subResources"`
-	Acts         Strings `gorm:"column:acts;not null;type:json;comment:对资源列表中各资源的actions" json:"acts"`
+	SubResources Strings `gorm:"column:sub_resources;not null;type:text;comment:角色所属belongType资源下的子资源列表" json:"subResources"`
+	Acts         Strings `gorm:"column:acts;not null;type:text;comment:对资源列表中各资源的actions" json:"acts"`
 	UpdatedBy    int     `gorm:"column:updated_by;type:int(11);not null;default:0;comment:最近一次对记录做更新的用户id" json:"updatedBy"`
 }
 
@@ -400,8 +400,8 @@ type PmsCustomRole struct {
 	ReferId      int     `gorm:"not null;comment:所属资源类型的对应资源id" json:"refer_id"`
 	RoleName     string  `gorm:"not null;size:50;comment:所属对应资源的角色名称" json:"role_name"`
 	Description  string  `gorm:"not null;size:255;default:'';comment:对角色的中文描述" json:"description"`
-	SubResources Strings `gorm:"not null;type:json;comment:角色所属refer_id资源的子资源列表" json:"sub_resources"`
-	Acts         Strings `gorm:"not null;type:json;comment:对资源列表中各资源的actions" json:"acts"`
+	SubResources Strings `gorm:"not null;type:text;comment:角色所属refer_id资源的子资源列表" json:"sub_resources"`
+	Acts         Strings `gorm:"not null;type:text;comment:对资源列表中各资源的actions" json:"acts"`
 	UpdatedBy    int     `gorm:"not null;default:0;comment:最近一次对记录做更新的用户id" json:"updated_by"`
 }
 

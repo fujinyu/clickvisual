@@ -49,10 +49,15 @@ debug = true
 # if isMultiCopy is true
 [redis]
 debug = false
+writeTimeout = "3s"
+# 正式
 db = 10
 addr = "r-bp19a6f117d96e84.redis.rds.aliyuncs.com:6379"
-writeTimeout = "3s"
 password = "VFBAmtMnOoG6GLqz"
+# 本地
+#db = 10
+#addr = "127.0.0.1:6379"
+#password = "123456"
 
 [mysql]
 debug = true
@@ -60,8 +65,9 @@ debug = true
 attachRetryInterval = "5s"
 # database DSN
 #dsn = "root:123456@tcp(127.0.0.1:33306)/clickvisual?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&readTimeout=1s&timeout=1s&writeTimeout=3s"
-dsn = "ilogtail:JzFtX4Jtbvm4Tk^a@tcp(172.16.128.54:3306)/clickvisual?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&readTimeout=1s&timeout=1s&writeTimeout=3s"
-#dsn = "ilogtail:JzFtX4Jtbvm4Tk^a@tcp(pc-bp114j3us45drbcat.rwlb.rds.aliyuncs.com:3306)/clickvisual?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&readTimeout=1s&timeout=1s&writeTimeout=3s"
+#dsn = "ilogtail:JzFtX4Jtbvm4Tk^a@tcp(172.16.128.54:3306)/clickvisual?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&readTimeout=1s&timeout=1s&writeTimeout=3s"
+dsn = "ilogtail:JzFtX4Jtbvm4Tk^a@tcp(pc-bp114j3us45drbcat.rwlb.rds.aliyuncs.com:3306)/clickvisual?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&readTimeout=1s&timeout=1s&writeTimeout=3s"
+#dsn = "ilogtail_test:OyO&e&WLl@!Tz##z@tcp(pc-bp18y89n3vs0mmz2g.rwlb.rds.aliyuncs.com:3306)/clickvisual_test?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&readTimeout=1s&timeout=1s&writeTimeout=3s"
 
 # log level
 level = "debug"
@@ -78,11 +84,13 @@ name = "clickvisual_session"
 debug = true
 Keypairs = "secret"
 # if use mode redis
-redisDb = "10"
 redisSize = 10
 redisNetwork = "tcp"
+# 正式
+redisDb = "10"
 redisAddr = "r-bp19a6f117d96e84.redis.rds.aliyuncs.com:6379"
 redisPassword = "VFBAmtMnOoG6GLqz"
+
 
 [auth.anonymous]
 # enable anonymous access
