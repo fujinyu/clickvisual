@@ -3502,7 +3502,6 @@ export default function QueryPage({ shareMode = false }: { shareMode?: boolean }
   const savedQuerySearchInputRef = useRef<HTMLInputElement | null>(null);
   const sourceSearchInputRef = useRef<HTMLInputElement | null>(null);
   const sourcePickerRef = useRef<HTMLDivElement | null>(null);
-  const sourcePickerHoverCloseTimerRef = useRef<number | null>(null);
   const inlineFieldPickerRef = useRef<HTMLLabelElement | null>(null);
   const histogramSelectionOverlayRef = useRef<HTMLDivElement | null>(null);
   const histogramSelectionRef = useRef<HistogramSelection | null>(null);
@@ -4016,42 +4015,6 @@ export default function QueryPage({ shareMode = false }: { shareMode?: boolean }
     }, 0);
     return () => window.clearTimeout(focusTimer);
   }, [sourcePickerOpen]);
-
-  useEffect(() => {
-    return () => {
-      if (sourcePickerHoverCloseTimerRef.current != null) {
-        window.clearTimeout(sourcePickerHoverCloseTimerRef.current);
-      }
-    };
-  }, []);
-
-  function clearSourcePickerHoverCloseTimer() {
-    if (sourcePickerHoverCloseTimerRef.current == null) {
-      return;
-    }
-    window.clearTimeout(sourcePickerHoverCloseTimerRef.current);
-    sourcePickerHoverCloseTimerRef.current = null;
-  }
-
-  function openSourcePickerFromHover() {
-    clearSourcePickerHoverCloseTimer();
-    setSourcePickerOpen(true);
-  }
-
-  function scheduleCloseSourcePickerFromHover() {
-    clearSourcePickerHoverCloseTimer();
-    sourcePickerHoverCloseTimerRef.current = window.setTimeout(() => {
-      sourcePickerHoverCloseTimerRef.current = null;
-      const hoveringAnchor = Boolean(sourcePickerRef.current?.matches(":hover"));
-      const hoveringPanel = Boolean(document.querySelector(".cv-query-source-popover-panel:hover"));
-      const hoveringContextMenu = Boolean(document.querySelector(".cv-context-menu:hover"));
-      if (hoveringAnchor || hoveringPanel || hoveringContextMenu) {
-        return;
-      }
-      setSourcePickerOpen(false);
-      closeInstanceContextMenu();
-    }, 160);
-  }
 
   useEffect(() => {
     if (!tableAutoQueryRequest) {
@@ -5928,8 +5891,6 @@ export default function QueryPage({ shareMode = false }: { shareMode?: boolean }
     workspace.setSelectedInstanceId(instance.id);
     workspace.setSelectedDatabase(database.name);
     workspace.setSelectedTable(table.name);
-    setSourcePickerOpen(false);
-    setSourceSearch("");
     setTableAutoQueryRequest({
       instanceId: instance.id,
       databaseName: database.name,
@@ -7217,6 +7178,7 @@ export default function QueryPage({ shareMode = false }: { shareMode?: boolean }
     const matchesSourceSearch = (...values: Array<string | undefined>) =>
       hasSourceSearch &&
       values.some((value) => String(value ?? "").toLowerCase().includes(sourceSearchKeyword));
+    const openedTabIdSet = new Set(validOpenLogTabs.map((tab) => tab.id));
     const sourceGroups = workspace.instances
       .map((item) => {
         const isActiveInstance = workspace.selectedInstanceId === item.id;
@@ -7304,6 +7266,7 @@ export default function QueryPage({ shareMode = false }: { shareMode?: boolean }
         <div className="cv-query-source-popover__body">
           <section role="tree" aria-label="Instances, databases, and log tables" className="cv-query-tree">
             {sourceGroups.map(({ item, isActiveInstance, isExpandedInstance, databaseGroups }) => {
+              const matchedTableTotal = databaseGroups.reduce((sum, group) => sum + group.databaseTables.length, 0);
               return (
                 <div
                   key={item.id}
@@ -7332,7 +7295,14 @@ export default function QueryPage({ shareMode = false }: { shareMode?: boolean }
                       aria-expanded={treeContextMenu.items.length > 0}
                     >
                       <span className="cv-query-tree__instance-mark" aria-hidden="true" />
-                      <span className="cv-query-tree__instance-name">{item.name}</span>
+                      <span className="cv-query-tree__instance-name" title={item.desc ? `${item.name} · ${item.desc}` : item.name}>
+                        {item.name}
+                      </span>
+                      {hasSourceSearch ? (
+                        <span className="cv-query-tree__count" aria-hidden="true" title="Log tables matched">
+                          {matchedTableTotal}
+                        </span>
+                      ) : null}
                     </button>
                   </div>
                   {isExpandedInstance ? (
@@ -7374,12 +7344,20 @@ export default function QueryPage({ shareMode = false }: { shareMode?: boolean }
                             >
                               <span className="cv-query-tree__database-rail" aria-hidden="true" />
                               <span className="cv-query-tree__database-dot" aria-hidden="true" />
-                              {database.name}
+                              <span className="cv-query-tree__database-name" title={database.name}>
+                                {database.name}
+                              </span>
+                              {hasSourceSearch ? (
+                                <span className="cv-query-tree__count" aria-hidden="true" title="Log tables matched">
+                                  {databaseTables.length}
+                                </span>
+                              ) : null}
                             </button>
                             {isExpandedDatabase ? (
                               <div role="group" aria-label={`${database.name} log tables`} className="cv-query-tree__tables">
                                 {databaseTables.map((table) => {
                                   const isActiveTable = workspace.selectedTable === table.name;
+                                  const isTabOpen = openedTabIdSet.has(table.id);
                                   return (
                                     <button
                                       key={table.name}
@@ -7387,6 +7365,7 @@ export default function QueryPage({ shareMode = false }: { shareMode?: boolean }
                                       aria-pressed={isActiveTable}
                                       aria-label={`Table ${table.name}`}
                                       className={`cv-query-tree__table${isActiveTable ? " cv-query-tree__table--active" : ""}`}
+                                      title="Click to open, right-click for actions"
                                       onClick={() => selectTableAndQueryRecentLogs(item, database, table)}
                                       onContextMenu={(event) => {
                                         event.preventDefault();
@@ -7404,7 +7383,14 @@ export default function QueryPage({ shareMode = false }: { shareMode?: boolean }
                                     >
                                       <span className="cv-query-tree__table-rail" aria-hidden="true" />
                                       <span className="cv-query-tree__table-dot" aria-hidden="true" />
-                                      {table.name}
+                                      <span className="cv-query-tree__table-name" title={table.name}>
+                                        {table.name}
+                                      </span>
+                                      {isTabOpen ? (
+                                        <span className="cv-query-tree__table-flag" title="Already opened in a tab">
+                                          <EuiIcon type="check" size="s" aria-hidden="true" />
+                                        </span>
+                                      ) : null}
                                     </button>
                                   );
                                 })}
@@ -7620,12 +7606,7 @@ export default function QueryPage({ shareMode = false }: { shareMode?: boolean }
         <div className="cv-query-main">
           {!shareMode ? (
             <div className="cv-query-log-tabs" aria-label="Log table workspace">
-              <div
-                className="cv-query-source-anchor"
-                ref={sourcePickerRef}
-                onMouseEnter={openSourcePickerFromHover}
-                onMouseLeave={scheduleCloseSourcePickerFromHover}
-              >
+              <div className="cv-query-source-anchor" ref={sourcePickerRef}>
                 <EuiPopover
                   anchorPosition="downLeft"
                   button={
@@ -7656,7 +7637,6 @@ export default function QueryPage({ shareMode = false }: { shareMode?: boolean }
                     </button>
                   }
                   closePopover={() => {
-                    clearSourcePickerHoverCloseTimer();
                     setSourcePickerOpen(false);
                     closeInstanceContextMenu();
                   }}
@@ -7665,10 +7645,6 @@ export default function QueryPage({ shareMode = false }: { shareMode?: boolean }
                   ownFocus={false}
                   panelClassName="cv-query-source-popover-panel"
                   panelPaddingSize="none"
-                  panelProps={{
-                    onMouseEnter: openSourcePickerFromHover,
-                    onMouseLeave: scheduleCloseSourcePickerFromHover
-                  }}
                   repositionToCrossAxis={false}
                   repositionOnScroll
                 >

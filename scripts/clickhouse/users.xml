@@ -1,0 +1,86 @@
+<?xml version="1.0"?>
+<clickhouse>
+    <!-- Profiles of settings. -->
+    <profiles>
+        <!-- 默认配置：适配2核4G单机通用场景 -->
+        <default>
+            <!-- 优化：单查询内存上限降至1G，避免单查询耗尽整机内存 -->
+            <max_memory_usage>1073741824</max_memory_usage>
+            <!-- 优化：单查询最大线程数2，匹配2核CPU -->
+            <max_threads>2</max_threads>
+
+            <!-- 优化：大查询自动落盘兜底，落盘阈值降至512M，避免OOM -->
+            <max_bytes_before_external_sort>536870912</max_bytes_before_external_sort>
+            <max_bytes_before_external_group_by>536870912</max_bytes_before_external_group_by>
+
+            <!-- 优化：单查询超时5分钟，防止慢查询卡死资源 -->
+            <max_execution_time>300</max_execution_time>
+
+            <!-- 优化：单次插入分区数从5000降至100，避免小文件泛滥 -->
+            <max_partitions_per_insert_block>100</max_partitions_per_insert_block>
+
+            <load_balancing>random</load_balancing>
+            <stream_like_engine_allow_direct_select>true</stream_like_engine_allow_direct_select>
+        </default>
+
+        <!-- 大查询专用Profile：离线分析、批量计算 -->
+        <big_query>
+            <max_memory_usage>2147483648</max_memory_usage>
+            <max_threads>2</max_threads>
+            <max_execution_time>1800</max_execution_time>
+        </big_query>
+
+        <!-- 高并发小查询Profile：接口、报表 -->
+        <fast_query>
+            <max_memory_usage>268435456</max_memory_usage>
+            <max_threads>2</max_threads>
+            <max_execution_time>30</max_execution_time>
+        </fast_query>
+
+        <!-- 只读Profile -->
+        <readonly>
+            <readonly>1</readonly>
+        </readonly>
+    </profiles>
+
+    <!-- Users and ACL. -->
+    <users>
+        <!-- 默认用户：生产环境建议仅本地管理使用，单独创建业务用户 -->
+        <default>
+            <!--
+                生产环境请设置强密码，使用SHA256加密存储
+                生成命令：echo -n "你的密码" | sha256sum
+                示例（密码为clickhouse）：
+                <password_sha256_hex>5c7d0f383f3d8b3816e50a9d8b8d0c3c7f3d9f3d9f3d9f3d9f3d9f3d9f3d9f3</password_sha256_hex>
+            -->
+            <password_sha256_hex>5c7d0f383f3d8b3816e50a9d8b8d0c3c7f3d9f3d9f3d9f3d9f3d9f3d9f3d9f3</password_sha256_hex>
+
+            <!--
+                访问IP限制：生产环境请收敛为业务内网段
+                示例：只允许10.0.0.0/8内网 + 本地访问
+            -->
+            <networks>
+                <ip>::/0</ip>
+            </networks>
+
+            <profile>default</profile>
+            <quota>default</quota>
+        </default>
+    </users>
+
+    <!-- Quotas：资源用量管控 -->
+    <quotas>
+        <default>
+            <interval>
+                <duration>3600</duration>
+                <!-- 每小时最多10000次查询，0表示不限制 -->
+                <queries>10000</queries>
+                <!-- 每小时查询总执行时间不超过10000秒 -->
+                <execution_time>10000</execution_time>
+                <errors>0</errors>
+                <result_rows>0</result_rows>
+                <read_rows>0</read_rows>
+            </interval>
+        </default>
+    </quotas>
+</clickhouse>

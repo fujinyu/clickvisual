@@ -1,0 +1,503 @@
+<!--
+  NOTE: User and query level settings are set up in "users.xml" file.
+  If you have accidentally specified user-level settings here, server won't start.
+  You can either move the settings to the right place inside "users.xml" file
+   or add <skip_check_for_incorrect_settings>1</skip_check_for_incorrect_settings> here.
+-->
+<clickhouse>
+    <logger>
+        <!-- Possible levels [1]:
+          - none (turns off logging)
+          - fatal
+          - critical
+          - error
+          - warning
+          - notice
+          - information
+          - debug
+          - trace
+          - test (not for production usage)
+            [1]: https://github.com/pocoproject/poco/blob/poco-1.9.4-release/Foundation/include/Poco/Logger.h#L105-L114
+        -->
+        <level>error</level>
+        <log>/var/log/clickhouse-server/clickhouse-server.log</log>
+        <errorlog>/var/log/clickhouse-server/clickhouse-server.err.log</errorlog>
+        <!-- Rotation policy
+             See https://github.com/pocoproject/poco/blob/poco-1.9.4-release/Foundation/include/Poco/FileChannel.h#L54-L85
+          -->
+        <size>1000M</size>
+        <count>10</count>
+        <!-- <console>1</console> --> <!-- Default behavior is autodetection (log to console if not daemon mode and is tty) -->
+    </logger>
+
+    <url_scheme_mappers>
+        <s3>
+            <to>https://{bucket}.s3.amazonaws.com</to>
+        </s3>
+        <gs>
+            <to>https://{bucket}.storage.googleapis.com</to>
+        </gs>
+        <oss>
+            <to>https://{bucket}.oss.aliyuncs.com</to>
+        </oss>
+    </url_scheme_mappers>
+
+    <!-- CORS 跨域配置 -->
+    <http_options_response>
+        <header>
+            <name>Access-Control-Allow-Origin</name>
+            <value>*</value>
+        </header>
+        <header>
+            <name>Access-Control-Allow-Headers</name>
+            <value>origin, x-requested-with, x-clickhouse-format, x-clickhouse-user, x-clickhouse-key, Authorization</value>
+        </header>
+        <header>
+            <name>Access-Control-Allow-Methods</name>
+            <value>POST, GET, OPTIONS</value>
+        </header>
+        <header>
+            <name>Access-Control-Max-Age</name>
+            <value>86400</value>
+        </header>
+    </http_options_response>
+
+    <!-- 端口配置 -->
+    <http_port>8123</http_port>
+    <tcp_port>9000</tcp_port>
+    <mysql_port>9004</mysql_port>
+    <postgresql_port>9005</postgresql_port>
+    <interserver_http_port>9009</interserver_http_port>
+
+    <!-- 监听地址：生产环境建议改为内网IP -->
+    <listen_host>0.0.0.0</listen_host>
+
+    <!-- 连接与并发配置（适配2核CPU） -->
+    <max_connections>64</max_connections>
+    <keep_alive_timeout>10</keep_alive_timeout>
+    <concurrent_threads_soft_limit_num>0</concurrent_threads_soft_limit_num>
+    <concurrent_threads_soft_limit_ratio_to_cores>2</concurrent_threads_soft_limit_ratio_to_cores>
+    <!-- 优化：并发查询数降至20，2核CPU 避免争抢 -->
+    <max_concurrent_queries>20</max_concurrent_queries>
+    <max_server_memory_usage>0</max_server_memory_usage>
+    <!-- 优化：全局线程池上限降至512，单机足够 -->
+    <max_thread_pool_size>512</max_thread_pool_size>
+
+    <!-- 优化：后台任务线程池，限制合并/写入后台并发，优先保障查询 -->
+
+    <!-- gRPC 配置 -->
+    <grpc>
+        <enable_ssl>false</enable_ssl>
+        <ssl_cert_file>/path/to/ssl_cert_file</ssl_cert_file>
+        <ssl_key_file>/path/to/ssl_key_file</ssl_key_file>
+        <ssl_require_client_auth>false</ssl_require_client_auth>
+        <ssl_ca_cert_file>/path/to/ssl_ca_cert_file</ssl_ca_cert_file>
+        <transport_compression_type>none</transport_compression_type>
+        <transport_compression_level>0</transport_compression_level>
+        <max_send_message_size>-1</max_send_message_size>
+        <max_receive_message_size>-1</max_receive_message_size>
+        <verbose_logs>false</verbose_logs>
+    </grpc>
+
+    <!-- OpenSSL 配置 -->
+    <openSSL>
+        <server>
+            <verificationMode>none</verificationMode>
+            <loadDefaultCAFile>true</loadDefaultCAFile>
+            <cacheSessions>true</cacheSessions>
+            <disableProtocols>sslv2,sslv3</disableProtocols>
+            <preferServerCiphers>true</preferServerCiphers>
+            <invalidCertificateHandler>
+                <name>RejectCertificateHandler</name>
+            </invalidCertificateHandler>
+        </server>
+        <client>
+            <loadDefaultCAFile>true</loadDefaultCAFile>
+            <cacheSessions>true</cacheSessions>
+            <disableProtocols>sslv2,sslv3</disableProtocols>
+            <preferServerCiphers>true</preferServerCiphers>
+            <invalidCertificateHandler>
+                <name>RejectCertificateHandler</name>
+            </invalidCertificateHandler>
+        </client>
+    </openSSL>
+
+    <!-- 内存配置（适配2核4G内存） -->
+    <!-- 优化：总内存占比 0.75（≈3G 上限），给系统预留约1G -->
+    <max_server_memory_usage_to_ram_ratio>0.75</max_server_memory_usage_to_ram_ratio>
+    <total_memory_profiler_step>4194304</total_memory_profiler_step>
+    <total_memory_tracker_sample_probability>0</total_memory_tracker_sample_probability>
+
+    <!-- 缓存配置（优化大小，避免过度占用内存） -->
+    <!-- 优化：未压缩缓存降至256M，收益低不值得大内存 -->
+    <uncompressed_cache_size>268435456</uncompressed_cache_size>
+    <!-- 优化：主索引缓存降至512M，单机足够覆盖热数据 -->
+    <mark_cache_size>536870912</mark_cache_size>
+    <!-- 优化：二级索引缓存降至256M -->
+    <index_mark_cache_size>268435456</index_mark_cache_size>
+    <mmap_cache_size>1000</mmap_cache_size>
+    <compiled_expression_cache_size>134217728</compiled_expression_cache_size>
+    <compiled_expression_cache_elements_size>10000</compiled_expression_cache_elements_size>
+
+    <custom_cached_disks_base_directory>/var/lib/clickhouse/caches/</custom_cached_disks_base_directory>
+    <validate_tcp_client_information>false</validate_tcp_client_information>
+
+    <!-- 数据主目录 -->
+    <path>/var/lib/clickhouse/</path>
+
+    <!-- ========== 阿里云 OSS 冷热分层存储配置【需填写参数】 ========== -->
+    <storage_configuration>
+        <disks>
+            <!-- 本地磁盘（热数据层） -->
+            <default>
+                <!-- 适配300G盘：预留10GB空闲空间，避免写满导致merge/沉降失败 -->
+                <keep_free_space_bytes>10737418240</keep_free_space_bytes>
+            </default>
+
+            <!-- 阿里云 OSS 磁盘（冷数据层） -->
+            <oss_disk>
+                <type>s3</type>
+                <!-- 【需替换】OSS 内网 Endpoint，同地域ECS必须用内网，免流量费 -->
+                <!-- 重要：ClickHouse 的 s3 磁盘不识别 <bucket> / <path> 两个键（会被静默忽略），
+                     Bucket 和对象前缀只能写在 endpoint 里，格式：
+                     https://<bucket>.oss-<region>-internal.aliyuncs.com/<前缀>/
+                     末尾斜杠可省，ClickHouse 会自己补。 -->
+                <endpoint>https://vtradex-ck-data.oss-cn-hangzhou-internal.aliyuncs.com/clickhouse/data/</endpoint>
+                <!-- 【需替换】阿里云 RAM 子账号 AccessKey ID -->
+                <access_key_id>xxx</access_key_id>
+                <!-- 【需替换】阿里云 RAM 子账号 AccessKey Secret -->
+                <secret_access_key>xxx</secret_access_key>
+                <!-- 【需替换】OSS 地域代码，和 Endpoint 对应，如 cn-hangzhou -->
+                <region>cn-hangzhou</region>
+
+                <!-- OSS 性能优化参数 -->
+                <!-- 这三个键名是对的，ClickHouse 直接读磁盘配置项 -->
+                <max_connections>32</max_connections>
+                <connect_timeout_ms>10000</connect_timeout_ms>
+                <request_timeout_ms>30000</request_timeout_ms>
+                <!-- 磁盘里的 S3 参数必须带 s3_ 前缀才认；裸 retry_attempts 会被静默忽略 -->
+                <s3_retry_attempts>3</s3_retry_attempts>
+                <!-- 小于该值走单次 PUT，超过才分片上传（原 min_multi_part_upload_size 不是有效键名） -->
+                <s3_max_single_part_upload_size>5242880</s3_max_single_part_upload_size>
+            </oss_disk>
+        </disks>
+
+        <policies>
+            <!-- 冷热分层策略（生产推荐）：热数据存本地，冷数据自动沉降到OSS -->
+            <hot_to_cold>
+                <volumes>
+                    <default>
+                        <disk>default</disk>
+                        <!-- 适配300G盘：分区超过10GB 才沉降冷存储（原值 102737418240 ≈ 95.7GB，数量级有误，会导致冷层形同虚设） -->
+                        <max_data_part_size_bytes>10737418240</max_data_part_size_bytes>
+                    </default>
+                    <cold>
+                        <disk>oss_disk</disk>
+                        <prefer_not_to_merge>true</prefer_not_to_merge>
+                    </cold>
+                </volumes>
+                <!-- 适配300G盘：剩余空间低于35%（约105GB）即开始沉降，为 merge 和搬迁留缓冲 -->
+                <move_factor>0.35</move_factor>
+            </hot_to_cold>
+
+            <!-- 全量存OSS策略（仅归档场景用，默认不启用）
+            <all_on_oss>
+                <volumes>
+                    <main>
+                        <disk>oss_disk</disk>
+                    </main>
+                </volumes>
+            </all_on_oss>
+            -->
+        </policies>
+    </storage_configuration>
+    <!-- ========== OSS 配置结束 ========== -->
+
+    <!-- 临时文件目录 -->
+    <tmp_path>/var/lib/clickhouse/tmp/</tmp_path>
+
+    <!-- 安全认证配置（生产加固） -->
+    <!-- 优化：关闭明文密码、空密码，强制加密认证 -->
+    <allow_plaintext_password>1</allow_plaintext_password>
+    <allow_no_password>0</allow_no_password>
+    <allow_implicit_no_password>0</allow_implicit_no_password>
+    <default_password_type>sha256_password</default_password_type>
+    <bcrypt_workfactor>12</bcrypt_workfactor>
+
+    <ldap_servers></ldap_servers>
+
+    <user_directories>
+        <users_xml>
+            <path>users.xml</path>
+        </users_xml>
+        <local_directory>
+            <path>/var/lib/clickhouse/access/</path>
+        </local_directory>
+    </user_directories>
+
+    <access_control_improvements>
+        <users_without_row_policies_can_read_rows>true</users_without_row_policies_can_read_rows>
+        <on_cluster_queries_require_cluster_grant>true</on_cluster_queries_require_cluster_grant>
+        <select_from_system_db_requires_grant>true</select_from_system_db_requires_grant>
+        <select_from_information_schema_requires_grant>true</select_from_information_schema_requires_grant>
+        <settings_constraints_replace_previous>true</settings_constraints_replace_previous>
+        <role_cache_expiration_time_seconds>600</role_cache_expiration_time_seconds>
+    </access_control_improvements>
+
+    <default_profile>default</default_profile>
+    <custom_settings_prefixes>SQL_</custom_settings_prefixes>
+    <default_database>default</default_database>
+
+    <!-- 优化：显式设置时区，避免依赖系统时区导致不一致 -->
+    <timezone>Asia/Shanghai</timezone>
+
+    <mlock_executable>false</mlock_executable>
+    <remap_executable>false</remap_executable>
+
+    <!-- 单机默认分片配置（保留，本地分布式表可用） -->
+    <remote_servers>
+        <default>
+            <shard>
+                <replica>
+                    <host>localhost</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </default>
+    </remote_servers>
+
+    <!-- MergeTree 引擎优化（适配单机写入场景） -->
+    <merge_tree>
+        <max_suspicious_broken_parts>10</max_suspicious_broken_parts>
+        <parts_to_delay_insert>300</parts_to_delay_insert>
+        <parts_to_throw_insert>600</parts_to_throw_insert>
+    </merge_tree>
+
+    <builtin_dictionaries_reload_interval>3600</builtin_dictionaries_reload_interval>
+    <max_session_timeout>3600</max_session_timeout>
+    <default_session_timeout>60</default_session_timeout>
+
+    <!-- 查询日志（优化：增加30天TTL，自动清理过期日志） -->
+    <query_log>
+        <database>system</database>
+        <table>query_log</table>
+        <partition_by>toYYYYMM(event_date)</partition_by>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <max_size_rows>1048576</max_size_rows>
+        <reserved_size_rows>8192</reserved_size_rows>
+        <buffer_size_rows_flush_threshold>524288</buffer_size_rows_flush_threshold>
+        <flush_on_crash>false</flush_on_crash>
+        <ttl>event_date + INTERVAL 30 DAY DELETE</ttl>
+    </query_log>
+
+    <!-- 链路追踪日志：每查询写入量大，300G盘场景关闭 -->
+    <!--
+    <trace_log>
+        <database>system</database>
+        <table>trace_log</table>
+        <partition_by>toYYYYMM(event_date)</partition_by>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <max_size_rows>1048576</max_size_rows>
+        <reserved_size_rows>8192</reserved_size_rows>
+        <buffer_size_rows_flush_threshold>524288</buffer_size_rows_flush_threshold>
+        <flush_on_crash>false</flush_on_crash>
+        <ttl>event_date + INTERVAL 30 DAY DELETE</ttl>
+    </trace_log>
+    -->
+
+    <!-- 查询线程日志 -->
+    <!-- 线程级日志写入量是 query_log 的数十倍，2核4G+300G盘场景关闭，排障时再临时开启 -->
+    <!--
+    <query_thread_log>
+        <database>system</database>
+        <table>query_thread_log</table>
+        <partition_by>toYYYYMM(event_date)</partition_by>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <max_size_rows>1048576</max_size_rows>
+        <reserved_size_rows>8192</reserved_size_rows>
+        <buffer_size_rows_flush_threshold>524288</buffer_size_rows_flush_threshold>
+        <flush_on_crash>false</flush_on_crash>
+        <ttl>event_date + INTERVAL 30 DAY DELETE</ttl>
+    </query_thread_log>
+    -->
+
+    <query_views_log>
+        <database>system</database>
+        <table>query_views_log</table>
+        <partition_by>toYYYYMM(event_date)</partition_by>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+    </query_views_log>
+
+    <!-- 数据分区操作日志 -->
+    <part_log>
+        <database>system</database>
+        <table>part_log</table>
+        <partition_by>toYYYYMM(event_date)</partition_by>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <max_size_rows>1048576</max_size_rows>
+        <reserved_size_rows>8192</reserved_size_rows>
+        <buffer_size_rows_flush_threshold>524288</buffer_size_rows_flush_threshold>
+        <flush_on_crash>false</flush_on_crash>
+        <ttl>event_date + INTERVAL 30 DAY DELETE</ttl>
+    </part_log>
+
+    <!-- 指标日志 -->
+    <metric_log>
+        <database>system</database>
+        <table>metric_log</table>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <max_size_rows>1048576</max_size_rows>
+        <reserved_size_rows>8192</reserved_size_rows>
+        <buffer_size_rows_flush_threshold>524288</buffer_size_rows_flush_threshold>
+        <collect_interval_milliseconds>1000</collect_interval_milliseconds>
+        <flush_on_crash>false</flush_on_crash>
+        <!-- 适配300G盘：指标类日志保留7天，避免占用本地热数据空间 -->
+        <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+    </metric_log>
+
+    <asynchronous_metric_log>
+        <database>system</database>
+        <table>asynchronous_metric_log</table>
+        <flush_interval_milliseconds>7000</flush_interval_milliseconds>
+        <max_size_rows>1048576</max_size_rows>
+        <reserved_size_rows>8192</reserved_size_rows>
+        <buffer_size_rows_flush_threshold>524288</buffer_size_rows_flush_threshold>
+        <flush_on_crash>false</flush_on_crash>
+        <!-- 适配300G盘：指标类日志保留7天，避免占用本地热数据空间 -->
+        <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+    </asynchronous_metric_log>
+
+    <opentelemetry_span_log>
+        <engine>
+            engine MergeTree
+            partition by toYYYYMM(finish_date)
+            order by (finish_date, finish_time_us, trace_id)
+        </engine>
+        <database>system</database>
+        <table>opentelemetry_span_log</table>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <max_size_rows>1048576</max_size_rows>
+        <reserved_size_rows>8192</reserved_size_rows>
+        <buffer_size_rows_flush_threshold>524288</buffer_size_rows_flush_threshold>
+        <flush_on_crash>false</flush_on_crash>
+    </opentelemetry_span_log>
+
+    <!-- 崩溃日志 -->
+    <crash_log>
+        <database>system</database>
+        <table>crash_log</table>
+        <partition_by />
+        <flush_interval_milliseconds>1000</flush_interval_milliseconds>
+        <max_size_rows>1024</max_size_rows>
+        <reserved_size_rows>1024</reserved_size_rows>
+        <buffer_size_rows_flush_threshold>512</buffer_size_rows_flush_threshold>
+        <flush_on_crash>true</flush_on_crash>
+    </crash_log>
+
+    <processors_profile_log>
+        <database>system</database>
+        <table>processors_profile_log</table>
+        <partition_by>toYYYYMM(event_date)</partition_by>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <max_size_rows>1048576</max_size_rows>
+        <reserved_size_rows>8192</reserved_size_rows>
+        <buffer_size_rows_flush_threshold>524288</buffer_size_rows_flush_threshold>
+        <flush_on_crash>false</flush_on_crash>
+    </processors_profile_log>
+
+    <asynchronous_insert_log>
+        <database>system</database>
+        <table>asynchronous_insert_log</table>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <max_size_rows>1048576</max_size_rows>
+        <reserved_size_rows>8192</reserved_size_rows>
+        <buffer_size_rows_flush_threshold>524288</buffer_size_rows_flush_threshold>
+        <flush_on_crash>false</flush_on_crash>
+        <partition_by>event_date</partition_by>
+        <ttl>event_date + INTERVAL 3 DAY</ttl>
+    </asynchronous_insert_log>
+
+    <backup_log>
+        <database>system</database>
+        <table>backup_log</table>
+        <partition_by>toYYYYMM(event_date)</partition_by>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+    </backup_log>
+
+    <s3queue_log>
+        <database>system</database>
+        <table>s3queue_log</table>
+        <partition_by>toYYYYMM(event_date)</partition_by>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+    </s3queue_log>
+
+    <blob_storage_log>
+        <database>system</database>
+        <table>blob_storage_log</table>
+        <partition_by>toYYYYMM(event_date)</partition_by>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <ttl>event_date + INTERVAL 30 DAY</ttl>
+    </blob_storage_log>
+
+    <top_level_domains_lists></top_level_domains_lists>
+    <dictionaries_config>*_dictionary.*ml</dictionaries_config>
+    <dictionaries_lazy_load>true</dictionaries_lazy_load>
+    <wait_dictionaries_load_at_startup>true</wait_dictionaries_load_at_startup>
+
+    <user_defined_executable_functions_config>*_function.*ml</user_defined_executable_functions_config>
+
+    <encryption_codecs></encryption_codecs>
+
+    <graphite_rollup_example>
+        <pattern>
+            <regexp>click_cost</regexp>
+            <function>any</function>
+            <retention>
+                <age>0</age>
+                <precision>3600</precision>
+            </retention>
+            <retention>
+                <age>86400</age>
+                <precision>60</precision>
+            </retention>
+        </pattern>
+        <default>
+            <function>max</function>
+            <retention>
+                <age>0</age>
+                <precision>60</precision>
+            </retention>
+            <retention>
+                <age>3600</age>
+                <precision>300</precision>
+            </retention>
+            <retention>
+                <age>86400</age>
+                <precision>3600</precision>
+            </retention>
+        </default>
+    </graphite_rollup_example>
+
+    <format_schema_path>/var/lib/clickhouse/format_schemas/</format_schema_path>
+    <google_protos_path>/usr/share/clickhouse/protos/</google_protos_path>
+
+    <!-- 查询缓存 -->
+    <query_cache>
+        <max_size_in_bytes>268435456</max_size_in_bytes>
+        <max_entries>1024</max_entries>
+        <max_entry_size_in_bytes>1048576</max_entry_size_in_bytes>
+        <max_entry_size_in_rows>300000</max_entry_size_in_rows>
+    </query_cache>
+
+    <backups>
+        <allowed_path>backups</allowed_path>
+        <remove_backup_files_after_failure>true</remove_backup_files_after_failure>
+    </backups>
+
+    <send_crash_reports>
+        <enabled>false</enabled>
+        <anonymize>false</anonymize>
+        <endpoint>https://6f33034cfe684dd7a3ab9875e57b1c8d@o388870.ingest.sentry.io/5226277</endpoint>
+    </send_crash_reports>
+
+</clickhouse>

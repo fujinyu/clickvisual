@@ -29,7 +29,7 @@ describe("query page", () => {
     await waitForQueryPageReady();
     const sourceButton = screen.getByRole("button", { name: "Sources" });
     if (sourceButton.getAttribute("aria-expanded") !== "true") {
-      fireEvent.mouseEnter(sourceButton.closest(".cv-query-source-anchor") ?? sourceButton);
+      fireEvent.click(sourceButton);
     }
     return screen.findByRole("tree", { name: "Instances, databases, and log tables" });
   }
@@ -395,7 +395,7 @@ describe("query page", () => {
     expect(screen.getByRole("button", { name: "Add condition" })).toBeInTheDocument();
   });
 
-  it("opens the datasource panel on Sources hover", async () => {
+  it("opens the datasource panel on Sources click, not on hover", async () => {
     render(
       <TimeRangeProvider>
         <QueryPage />
@@ -403,9 +403,15 @@ describe("query page", () => {
     );
 
     await waitForQueryPageReady();
-    const sourceAnchor = screen.getByRole("button", { name: "Sources" }).closest(".cv-query-source-anchor");
+    const sourceButton = screen.getByRole("button", { name: "Sources" });
+    const sourceAnchor = sourceButton.closest(".cv-query-source-anchor");
     expect(sourceAnchor).toBeTruthy();
     fireEvent.mouseEnter(sourceAnchor!);
+    expect(
+      screen.queryByRole("tree", { name: "Instances, databases, and log tables" })
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(sourceButton);
     expect(await screen.findByRole("tree", { name: "Instances, databases, and log tables" })).toBeInTheDocument();
   });
 
@@ -452,6 +458,39 @@ describe("query page", () => {
     fireEvent.keyDown(search, { key: "Escape" });
     expect(search).toHaveValue("");
     expect(screen.getByRole("button", { name: "Table logs" })).toBeInTheDocument();
+  });
+
+  it("keeps the datasource panel open after picking a table", async () => {
+    render(
+      <TimeRangeProvider>
+        <QueryPage />
+      </TimeRangeProvider>
+    );
+
+    const tree = await openDatasourcePanel();
+    fireEvent.click(within(tree).getByRole("button", { name: "Table logs" }));
+    expect(await screen.findByRole("tab", { name: "default.logs" })).toBeInTheDocument();
+    expect(screen.getByRole("tree", { name: "Instances, databases, and log tables" })).toBeInTheDocument();
+
+    fireEvent.click(within(tree).getByRole("button", { name: "Table app_logs" }));
+    expect(await screen.findByRole("tab", { name: "default.app_logs" })).toBeInTheDocument();
+    expect(screen.getByRole("tree", { name: "Instances, databases, and log tables" })).toBeInTheDocument();
+  });
+
+  it("shows matched table counts per instance and database while searching", async () => {
+    render(
+      <TimeRangeProvider>
+        <QueryPage />
+      </TimeRangeProvider>
+    );
+
+    await openDatasourcePanel();
+    const search = screen.getByRole("searchbox", { name: "Search sources" });
+    fireEvent.change(search, { target: { value: "app" } });
+    expect(screen.getByRole("button", { name: "Table app_logs" })).toBeInTheDocument();
+
+    const counts = Array.from(document.querySelectorAll(".cv-query-tree__count")).map((node) => node.textContent);
+    expect(counts).toEqual(["1", "1"]);
   });
 
   it("keeps the time range picker available on the share page", async () => {
