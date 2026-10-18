@@ -141,6 +141,20 @@ const UserGrant = ({
       : [];
   }, [commonInfo]);
 
+  // 后端 domainCascader 的首项固定为 { value: "*", label: "全部" }（见 pmsplugin.GetDomainCascaderOptions），
+  // 即“不限制数据域”；仅当 commonInfo 尚未加载（拿不到后端选项）时，才合成一个 * 兜底，避免出现两个等价的“全部”
+  const domainSelectOptions = useMemo(() => {
+    if (domainOptions.length > 0) {
+      return domainOptions;
+    }
+    return [
+      {
+        value: "*",
+        label: i18n.formatMessage({ id: "sys.user.grant.allDomain" }),
+      },
+    ];
+  }, [domainOptions]);
+
   const rolesOfAddInstance = useMemo(() => {
     if (addInstanceId === null) return [];
     return grants[addInstanceId]?.roles ?? [];
@@ -396,13 +410,7 @@ const UserGrant = ({
             ]}
           >
             <Select
-              options={[
-                {
-                  value: "*",
-                  label: i18n.formatMessage({ id: "sys.user.grant.allDomain" }),
-                },
-                ...domainOptions,
-              ]}
+              options={domainSelectOptions}
             />
           </Form.Item>
         </Form>
