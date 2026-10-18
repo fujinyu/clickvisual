@@ -52,6 +52,12 @@ const wildcardUserSubject = PrefixUser + SEP + "-1"
 //     the instance visible but no database or table.
 //
 // The result is exactly what the old cascade computed, without touching the db.
+//
+// The grants of the wildcard subject user__-1 are merged into every summary:
+// every CheckNormalPermission evaluates the request with that subject as well
+// (see checkAsterisk in the permission package), so those grants apply to
+// every non-root user - e.g. the default public instances are granted to
+// user__-1 and must stay visible for everybody.
 type UserViewSummary struct {
 	root bool
 	// instG3Sub[iid][subResource]: instance-wide grant(g3) of the user. Such a
@@ -134,8 +140,15 @@ func buildUserViewSummary(e *casbin.Enforcer, uid int) *UserViewSummary {
 	enforcerLock.Lock()
 	defer enforcerLock.Unlock()
 	isRoot := len(e.GetFilteredNamedGroupingPolicy(RuleTypeG3, 0, userStr, rootRoleStr)) > 0
+	// The wildcard subject user__-1 is evaluated by every CheckNormalPermission
+	// (checkAsterisk), so its grants apply to every non-root user: merge its
+	// rules into the enumeration below. Without this, a user whose only
+	// visibility comes from a user__-1 grant(e.g. the default public
+	// instances) would get an empty summary and see nothing.
 	g3Rules := copyStringRules(e.GetFilteredNamedGroupingPolicy(RuleTypeG3, 0, userStr))
+	g3Rules = append(g3Rules, copyStringRules(e.GetFilteredNamedGroupingPolicy(RuleTypeG3, 0, wildcardUserSubject))...)
 	gRules := copyStringRules(e.GetFilteredNamedGroupingPolicy(RuleTypeG, 0, userStr))
+	gRules = append(gRules, copyStringRules(e.GetFilteredNamedGroupingPolicy(RuleTypeG, 0, wildcardUserSubject))...)
 	if isRoot {
 		s.root = true
 		return s

@@ -267,6 +267,65 @@ func TestUserViewSummaryStarDomainGrant(t *testing.T) {
 	}
 }
 
+// TestUserViewSummaryWildcardUserInstanceGrant reproduces the production
+// incident: the default public instances are granted to the wildcard subject
+// user__-1, and every CheckNormalPermission evaluates the request with that
+// subject too(checkAsterisk). A user without any personal rule must still see
+// them - otherwise menus/list returns [] and the UI shows a blank page.
+func TestUserViewSummaryWildcardUserInstanceGrant(t *testing.T) {
+	e := newTestEnforcer(t)
+	addPRole(t, e, "9", 1, Log, ActView)
+	addPRole(t, e, "9", 6, Log, ActView)
+	addG3(t, e, -1, "role__9__instance__1") // user__-1 -> instance 1
+	addG3(t, e, -1, "role__9__instance__6") // user__-1 -> instance 6
+
+	s := buildUserViewSummary(e, 68) // a user with no personal rules at all
+
+	if !s.InstanceSubVisible(1, Log) || !s.InstanceSubVisible(6, Log) {
+		t.Error("instances granted to user__-1 must be visible for every user")
+	}
+	if !s.InstanceVisible(1) || !s.InstanceVisible(6) {
+		t.Error("InstanceVisible must be true for wildcard-granted instances")
+	}
+	if !s.AnyInstanceSub(Log) {
+		t.Error("AnyInstanceSub(Log) must be true(menu flags depend on it)")
+	}
+	if s.InstanceVisible(2) || s.InstanceSubVisible(2, Log) {
+		t.Error("instance 2 has no wildcard grant and must stay invisible")
+	}
+	// an instance-wide grant subsumes every lower level check
+	if !s.DatabaseSubVisible(1, 7) || !s.TableSubVisible(6, 9) {
+		t.Error("wildcard instance-wide grant must imply db/table visibility")
+	}
+}
+
+// TestUserViewSummaryWildcardUserDomainGrant covers a domain-scoped grant held
+// by the wildcard subject: it must make exactly that database visible for
+// every user, and nothing else.
+func TestUserViewSummaryWildcardUserDomainGrant(t *testing.T) {
+	e := newTestEnforcer(t)
+	addPRole(t, e, "10", 2, Log, ActView)
+	addG(t, e, -1, "role__10__instance__2", "BaseDatabase__7") // user__-1 -> db 7 of instance 2
+
+	s := buildUserViewSummary(e, 68)
+
+	if !s.InstanceVisible(2) || !s.InstanceSubVisible(2, Log) {
+		t.Error("a wildcard db-scoped grant must make the instance visible")
+	}
+	if !s.DatabaseSubVisible(2, 7) || !s.DatabaseSubResourceVisible(2, 7, Log) {
+		t.Error("database 7 must be visible through the wildcard grant")
+	}
+	if s.DatabaseSubVisible(2, 8) || s.DatabaseSubVisible(3, 7) {
+		t.Error("only the granted database of the granted instance may be visible")
+	}
+	if s.TableSubVisible(2, 9) {
+		t.Error("no table was granted, TableSubVisible must be false")
+	}
+	if ids := s.GrantedTableIds(2); len(ids) != 0 {
+		t.Errorf("GrantedTableIds(2) = %v, want empty", ids)
+	}
+}
+
 func TestInstanceIdFromRoleStr(t *testing.T) {
 	cases := []struct {
 		role string
