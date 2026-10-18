@@ -159,10 +159,8 @@ func (s *srvStorage) CreateByILogtailTemplate(uid int, databaseInfo db2.BaseData
 
 func (s *srvStorage) CreateByILogtailK8sTemplate(uid int, databaseInfo db2.BaseDatabase, param view.ReqCreateStorageByTemplateILogtail) (err error) {
 	cp := view.ReqStorageCreate{
-		CreateType: constx.TableCreateTypeJSONAsString,
-		// 时间源用容器原始日志时间 _time_（RFC3339Nano），不用采集侧的 time/time_ns：
-		// time_ns 是 iLogtail 处理时刻，跨批次抖动会把同一段堆栈的先后顺序颠倒。
-		Typ:                     1,
+		CreateType:              constx.TableCreateTypeJSONAsString,
+		Typ:                     2,
 		Days:                    param.Days,
 		Brokers:                 param.Brokers,
 		Consumers:               2,
@@ -186,7 +184,7 @@ func (s *srvStorage) CreateByILogtailK8sTemplate(uid int, databaseInfo db2.BaseD
             "time_ns":1715828404117983200
         }`,
 		DatabaseId:  databaseInfo.ID,
-		TimeField:   "_time_",
+		TimeField:   "time",
 		RawLogField: "content",
 	}
 	cp.Topics = param.Topic
