@@ -87,6 +87,25 @@ func (p *pms) GrantRoles2User(userId []int, roleId int) (err error) {
 	// assign one by one, so every user gets a valid casbin subject(user__<uid>).
 	// note: do NOT fmt.Sprintf("%s", userId) here, it stringifies the whole
 	// slice(e.g. "[3]") and breaks both casbin matching and reading the grant back.
+	roleStr, err := pmsplugin.GetValidRoleStrByRoleItemV1(appDefaultRoles[0])
+	if err != nil {
+		elog.Error("GrantRoles2User: assemble roleStr failed", zap.Int("roleId", roleId), zap.Error(err))
+		return err
+	}
+	// overwrite semantics(mirroring GrantRootUsers): users unchecked in the UI
+	// must have their g rules deleted, otherwise the removable tags of the
+	// grant modal lie(add-only would silently keep old grants).
+	_, _, uidsNeed2Rm := pmsplugin.CmpUserIds2GetNewAndRmUserIds(p.GetRoleUsersId(roleId), userId)
+	for _, rmUid := range uidsNeed2Rm {
+		userStr, _ := pmsplugin.Assemble2CasbinStr(pmsplugin.PrefixUser, strconv.Itoa(rmUid))
+		// also try the legacy malformed subject(user__[3]) written before this was fixed
+		legacyUserStr := fmt.Sprintf("%s%s[%d]", pmsplugin.PrefixUser, pmsplugin.SEP, rmUid)
+		for _, subject := range []string{userStr, legacyUserStr} {
+			if _, rmErr := pmsplugin.DelRule(pmsplugin.RuleTypeG, subject, roleStr, ""); rmErr != nil {
+				elog.Warn("GrantRoles2User: remove outdated g rule failed", zap.String("subject", subject), zap.Error(rmErr))
+			}
+		}
+	}
 	for _, uid := range userId {
 		if uid <= 0 {
 			continue
@@ -761,7 +780,23 @@ func (p *pms) GetRoleUsersId(roleId int) (uids []int) {
 			}
 		}
 	}
-	return uids
+	// dedupe: a user may hold both the correct rule(user__3) and the legacy
+	// malformed one(user__[3]) if the grant was re-saved before cleaning up.
+	return dedupeInts(uids)
+}
+
+// dedupeInts removes duplicated items and keeps the first-seen order.
+func dedupeInts(uids []int) []int {
+	seen := make(map[int]struct{}, len(uids))
+	deduped := make([]int, 0, len(uids))
+	for _, uid := range uids {
+		if _, ok := seen[uid]; ok {
+			continue
+		}
+		seen[uid] = struct{}{}
+		deduped = append(deduped, uid)
+	}
+	return deduped
 }
 
 func (p *pms) GrantRootUsers(newRootUids []int) {

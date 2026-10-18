@@ -1,6 +1,9 @@
 package permission
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestParseUidFromSubjectStr(t *testing.T) {
 	cases := []struct {
@@ -19,6 +22,26 @@ func TestParseUidFromSubjectStr(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			if got := parseUidFromSubjectStr(c.subjectStr); got != c.expectedUid {
 				t.Errorf("parseUidFromSubjectStr(%q) = %d, want %d", c.subjectStr, got, c.expectedUid)
+			}
+		})
+	}
+}
+
+func TestDedupeInts(t *testing.T) {
+	cases := []struct {
+		name     string
+		input    []int
+		expected []int
+	}{
+		{name: "no duplication", input: []int{1, 2, 3}, expected: []int{1, 2, 3}},
+		{name: "correct and legacy rule of same user", input: []int{3, 3}, expected: []int{3}},
+		{name: "keep first-seen order", input: []int{5, 2, 5, 1, 2}, expected: []int{5, 2, 1}},
+		{name: "empty", input: []int{}, expected: []int{}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := dedupeInts(c.input); !reflect.DeepEqual(got, c.expected) {
+				t.Errorf("dedupeInts(%v) = %v, want %v", c.input, got, c.expected)
 			}
 		})
 	}
