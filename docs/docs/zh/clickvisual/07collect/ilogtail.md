@@ -177,6 +177,40 @@ head -50 /home/fc/logs/ehub-message-service/*.log
 
 硬约束：`StartPattern` 与 `EndPattern` 都为空、只给 `ContinuePattern` 时，**整段 `Multiline` 会被忽略并告警**，至少要配 Start 或 End 之一。
 
+#### StartPattern 必须写成整行匹配（boost 用的是 regex_match）
+
+`BoostRegexMatch` 内部调 `boost::regex_match(buffer, buffer + size, reg)`（`core/common/StringTools.cpp`），要求**整行**被模式吃掉；Go 侧 `beginLineReg.MatchString` 只需任意位置命中。因此两条链路的块首正则**不能互相照抄**：
+
+| 链路 | 匹配语义 | 块首正则写法 |
+| --- | --- | --- |
+| `service_docker_stdout`（Go / RE2） | 搜索匹配 | `^\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} ` |
+| `input_file`（C++ / boost） | 整行匹配 | `^\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} .*` |
+
+漏掉结尾的 `.*` 时，StartPattern 对任何一行都匹配不上，状态机永远停在 `SPLIT_UNMATCH`，每行走 `HandleUnmatchLogs` 的 `single_line` 分支，表现为"配了合并但完全没合并"；同时 `LogSplit` 因 `anyMatched` 从未置真而返回 false，触发 `SPLIT_LOG_FAIL_ALARM`。这条告警就是漏写 `.*` 的自检信号：
+
+```bash
+kubectl -n ilogtail logs ds/ilogtail-ds | grep -c "split log lines fail"
+```
+
+#### 只配 StartPattern，不要配 ContinuePattern
+
+StartPattern 单独使用时，**不匹配的行默认留在当前块内**（`core/processor/ProcessorSplitRegexNative.cpp` 状态机原文注释 `// else case: begin+end or begin, we should keep unmatch log in the cache`）。这正是需要的行为：`Caused by:`、`Suppressed:`、`\t... 173 more` 只要不匹配 StartPattern 就自动并回上一块，**不需要 Go 侧那个 `ExcludeBeginRegex`**。
+
+一旦补上 ContinuePattern，状态会进入 `SPLIT_CONTINUE`：遇到既不匹配 Continue 也不匹配 Start 的行，当前块被立即切断、该行被单独处理。换言之 ContinuePattern 反而会把 `Caused by:` 切出块外。
+
+若日志没有稳定时间戳前缀、必须用 Tab 启发式判块首，把排除逻辑用负向前瞻内联进 StartPattern（boost 的 ECMAScript 语法支持 `(?!...)`，不支持后顾 `(?<=)`，此处用不上）：
+
+```yaml
+    Multiline:
+      Mode: custom
+      StartPattern: '^(?!Caused by:|Suppressed:)[^\t].*$'
+      UnmatchedContentTreatment: single_line
+```
+
+注意 `\t... 173 more` 本身带 Tab 缩进，`[^\t]` 天然把它当续行；真正顶格、会被误判为块首的只有 `Caused by:` 与 `Suppressed:` 两类。
+
+> 待裁定：上方两处示例按本节结论是错的，因该文件在禁覆盖清单内，未就地改写。一是 `StartPattern: '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}'` 缺结尾 `.*`，实际一行都匹配不上；二是"无稳定时间戳前缀时的两段式写法"里 `StartPattern` 与 `ContinuePattern` 的组合会切断块，应换成上面的负向前瞻单行写法。
+
 ### Convert.Protocol 合法值
 
 `custom_single`、`custom_single_flatten`、`otlp_v1`、`influxdb`、`jsonline`、`raw`（`pkg/protocol/converter/converter.go`）。写错会直接返回 `unsupported protocol`，日志不投递。本 fork 的 `log_id` 在 `custom_single_flatten` 路径生成（`converter_single_log_flatten.go`）。
