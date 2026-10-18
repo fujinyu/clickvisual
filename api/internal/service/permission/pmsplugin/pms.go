@@ -337,6 +337,21 @@ func AddRule(ruleType string, params ...interface{}) (bool, error) {
 		if len(params) < 3 {
 			return false, errors.New("add rule failed, g rule must have 3 items")
 		}
+		if isEmptyDomParam(params[2]) {
+			// An empty domain must be stored as a g3 rule, never as a g rule.
+			// Reason: gorm-adapter trims the trailing empty columns when loading
+			// a db row into a policy line, so a g rule stored with v2="" is loaded
+			// as a 2-token rule; casbin's persist.LoadPolicyArray then rejects it
+			// via HasPolicyEx(2 tokens < 3 tokens of the "g = _, _, _" assertion)
+			// and silently skips the row. The consequences are that such a grant
+			//	1. disappears from the enforcer memory after every (re)start, so
+			//	permission checks stop matching it, and
+			//	2. is invisible to the in-memory HasPolicy check of the next
+			//	AddRule, so the adapter tries to INSERT the same row again and
+			//	fails with MySQL error 1062(duplicate entry on the unique index).
+			// See the g/g3 convention at the top of common.go.
+			return enforcer.AddNamedGroupingPolicy(RuleTypeG3, params[:2]...)
+		}
 		return enforcer.AddNamedGroupingPolicy(ruleType, params[:3]...)
 	case RuleTypeG2:
 		if len(params) < 2 {
@@ -391,6 +406,14 @@ func EnforcerLock() {
 }
 func EnforcerUnlock() {
 	enforcerLock.Unlock()
+}
+
+// isEmptyDomParam reports whether the domain param(e.g. the 3rd param of a g
+// rule) carries no domain at all, in which case the rule must be stored as g3
+// instead of g. See the comment inside AddRule for the full reason.
+func isEmptyDomParam(dom interface{}) bool {
+	domStr, ok := dom.(string)
+	return ok && strings.TrimSpace(domStr) == ""
 }
 
 // func EnforcerLoadPolicy() {
@@ -574,6 +597,114 @@ func GetRulesByRoleStrDirectly(roleStr string, reqDom string) *[]EnhancedCasbinR
 		}
 	}
 	return &result
+}
+
+/*
+GetRulesByRoleStrFromDb: read the g/g3 rules of a role straight from the
+cv_pms_casbin_rule table, bypassing the enforcer memory.
+
+This is the db-backed counterpart of GetRulesByRoleStrDirectly, and it must be
+used whenever the result is shown to the user or drives an "overwrite" diff:
+the enforcer memory is NOT a reliable source of truth for g rules with an empty
+domain, because gorm-adapter trims the trailing empty columns on load and
+casbin's persist.LoadPolicyArray then skips the 2-token rule(see the comment
+inside AddRule). Such rules live in the db only after every restart, so reading
+the db directly is the only way to see(and later clean up) grants written by the
+old V1 flow.
+
+param:
+
+	roleStr: like "role__xxx"
+	reqDom: (Optional) the domainStr for filter out the g rules. If empty string will not check dom
+*/
+func GetRulesByRoleStrFromDb(roleStr string, reqDom string) *[]EnhancedCasbinRulesItem {
+	if !strings.Contains(roleStr, PrefixRole+SEP) {
+		return nil
+	}
+	var dbRules []db2.PmsCasbinRule
+	if err := invoker.Db.Table(db2.TableNamePmsCasbinRule).
+		Where("ptype IN ? AND v1 = ?", []string{RuleTypeG, RuleTypeG3}, roleStr).
+		Find(&dbRules).Error; err != nil {
+		elog.Error("read casbin rules of role from db failed", zap.String("roleStr", roleStr), zap.Error(err))
+		return nil
+	}
+	grouped := groupDbCasbinRules(dbRules, reqDom)
+	return &grouped
+}
+
+// groupDbCasbinRules groups raw db rows of the casbin rule table into
+// EnhancedCasbinRulesItem(s) by ptype, keeping only the meaningful tokens of
+// each rule(g: v0,v1,v2; g3: v0,v1) and applying the optional domain filter to
+// g rules. Rows of other ptypes(e.g. p) are ignored.
+func groupDbCasbinRules(dbRules []db2.PmsCasbinRule, reqDom string) []EnhancedCasbinRulesItem {
+	result := make([]EnhancedCasbinRulesItem, 0)
+	gItem := EnhancedCasbinRulesItem{Ptype: RuleTypeG, Rules: [][]string{}}
+	g3Item := EnhancedCasbinRulesItem{Ptype: RuleTypeG3, Rules: [][]string{}}
+	var hasG, hasG3 bool
+	for _, dbRule := range dbRules {
+		switch dbRule.Ptype {
+		case RuleTypeG:
+			if reqDom != "" && !IsDomMatched(reqDom, dbRule.V2) {
+				continue
+			}
+			gItem.Rules = append(gItem.Rules, []string{dbRule.V0, dbRule.V1, dbRule.V2})
+			hasG = true
+		case RuleTypeG3:
+			g3Item.Rules = append(g3Item.Rules, []string{dbRule.V0, dbRule.V1})
+			hasG3 = true
+		}
+	}
+	if hasG {
+		result = append(result, gItem)
+	}
+	if hasG3 {
+		result = append(result, g3Item)
+	}
+	return result
+}
+
+/*
+DelRuleFromDbDirectly: delete the exact row of a casbin rule from the
+cv_pms_casbin_rule table, regardless of whether the rule exists in the enforcer
+memory.
+
+This is the delete-side counterpart of GetRulesByRoleStrFromDb. Rules that
+LoadPolicyArray skipped(empty-domain g rules) can never be matched by the
+memory-based DelRule, so removing them requires a direct db delete.
+
+Callers should still try the memory-based DelRule first, so that a live
+enforcer(and, in multi-copy mode, its watcher) stays in sync.
+
+param: ruleType in ["p", "g", "g2", "g3"]; params are the tokens of the rule:
+p -> v0, v1, v2, v3; g -> v0, v1, v2; g2/g3 -> v0, v1
+*/
+func DelRuleFromDbDirectly(ruleType string, params ...string) error {
+	if len(params) < 2 {
+		return errors.New("delete rule from db failed, at least 2 items(v0, v1) are required")
+	}
+	conds := make(egorm.Conds)
+	conds["ptype"] = ruleType
+	conds["v0"] = params[0]
+	conds["v1"] = params[1]
+	switch ruleType {
+	case RuleTypeP:
+		if len(params) < 4 {
+			return errors.New("delete rule from db failed, p rule must have 4 items")
+		}
+		conds["v2"] = params[2]
+		conds["v3"] = params[3]
+	case RuleTypeG:
+		if len(params) < 3 {
+			return errors.New("delete rule from db failed, g rule must have 3 items")
+		}
+		conds["v2"] = params[2]
+	case RuleTypeG2, RuleTypeG3:
+		// only v0 and v1 are needed
+	default:
+		return errors.Errorf("delete rule from db failed, invalid ruleType(%s)", ruleType)
+	}
+	sql, binds := egorm.BuildQuery(conds)
+	return invoker.Db.Table(db2.TableNamePmsCasbinRule).Where(sql, binds...).Delete(&db2.PmsCasbinRule{}).Error
 }
 
 // GetRulesByRole : Search CasbinRules to get all rules(explicit and implicit) which related to "role" string

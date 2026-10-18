@@ -101,8 +101,22 @@ func (p *pms) GrantRoles2User(userId []int, roleId int) (err error) {
 		// also try the legacy malformed subject(user__[3]) written before this was fixed
 		legacyUserStr := fmt.Sprintf("%s%s[%d]", pmsplugin.PrefixUser, pmsplugin.SEP, rmUid)
 		for _, subject := range []string{userStr, legacyUserStr} {
+			// two storage formats may exist for the same grant:
+			//   g3 with no domain: the current format(see AssignRoles2UserV1);
+			//   g with an empty domain: the legacy format, which is skipped by
+			//   casbin's LoadPolicyArray and therefore only lives in the db
+			//   after a restart, so it must be deleted from the db directly.
+			if _, rmErr := pmsplugin.DelRule(pmsplugin.RuleTypeG3, subject, roleStr); rmErr != nil {
+				elog.Warn("GrantRoles2User: remove outdated g3 rule failed", zap.String("subject", subject), zap.Error(rmErr))
+			}
+			if rmErr := pmsplugin.DelRuleFromDbDirectly(pmsplugin.RuleTypeG3, subject, roleStr); rmErr != nil {
+				elog.Warn("GrantRoles2User: remove outdated g3 rule from db failed", zap.String("subject", subject), zap.Error(rmErr))
+			}
 			if _, rmErr := pmsplugin.DelRule(pmsplugin.RuleTypeG, subject, roleStr, ""); rmErr != nil {
-				elog.Warn("GrantRoles2User: remove outdated g rule failed", zap.String("subject", subject), zap.Error(rmErr))
+				elog.Warn("GrantRoles2User: remove legacy g rule failed", zap.String("subject", subject), zap.Error(rmErr))
+			}
+			if rmErr := pmsplugin.DelRuleFromDbDirectly(pmsplugin.RuleTypeG, subject, roleStr, ""); rmErr != nil {
+				elog.Warn("GrantRoles2User: remove legacy g rule from db failed", zap.String("subject", subject), zap.Error(rmErr))
 			}
 		}
 	}
@@ -114,6 +128,10 @@ func (p *pms) GrantRoles2User(userId []int, roleId int) (err error) {
 			return err
 		}
 	}
+	// resync the enforcer with the db(mirroring GrantRootUsers): the db-direct
+	// deletes above are invisible to the memory, and in single-copy deployments
+	// no watcher notification arrives for rules changed by another process.
+	pmsplugin.EnforcerLoadPolicy()
 	return nil
 }
 
@@ -128,11 +146,15 @@ func (p *pms) AssignRoles2UserV1(userId string, reqRoles []view.RoleItem) (err e
 			elog.Warn("invalid roleString", zap.Error(err))
 			continue
 		}
-
-		var gType = pmsplugin.RuleTypeG
-		var targetDom string
-
-		if _, err := pmsplugin.AddRule(gType, userStr, roleStr, targetDom); err != nil {
+		// The V1 grant flow never carries a domain, so per the g/g3 convention
+		// (see the top of pmsplugin/common.go) the grant must be stored as a g3
+		// rule. Storing it as a g rule with an empty domain used to break two
+		// things: the rule is skipped by casbin's LoadPolicyArray(2 tokens < 3
+		// tokens of the g assertion) and thus vanishes from the enforcer after
+		// every restart, and re-granting the same user then fails with MySQL
+		// error 1062 on idx_cv_pms_casbin_rule. See AddRule for the details.
+		// If a domain-carrying grant is ever needed here, use AssignRoles2User.
+		if _, err := pmsplugin.AddRule(pmsplugin.RuleTypeG3, userStr, roleStr); err != nil {
 			elog.Warn("assign role to user error", zap.String("role", roleStr), zap.Error(err))
 		}
 	}
@@ -751,6 +773,11 @@ func parseUidFromSubjectStr(subjectStr string) int {
 // Note, in the V1 assign flow(GrantRoles2User -> AssignRoles2UserV1), the role-user
 // relations are stored as casbin g/g3 rules(subject: user__<uid>, role: role__<name>__instance__0),
 // so read them back by the roleStr assembled from the target role.
+// The rules are read from the cv_pms_casbin_rule table directly instead of the
+// enforcer memory: empty-domain g rules written by the old flow are skipped by
+// casbin's LoadPolicyArray and thus missing from the memory after every restart,
+// which made previously granted users invisible here(and caused error 1062 on
+// re-grant). The db is the source of truth. See GetRulesByRoleStrFromDb.
 func (p *pms) GetRoleUsersId(roleId int) (uids []int) {
 	uids = make([]int, 0)
 	roleInfo, err := db2.PmsRoleInfo(roleId)
@@ -768,7 +795,7 @@ func (p *pms) GetRoleUsersId(roleId int) (uids []int) {
 		elog.Warn("GetRoleUsersId: assemble roleStr failed", zap.Int("roleId", roleId), zap.Error(err))
 		return uids
 	}
-	eRules := pmsplugin.GetRulesByRoleStrDirectly(roleStr, "")
+	eRules := pmsplugin.GetRulesByRoleStrFromDb(roleStr, "")
 	if eRules == nil {
 		return uids
 	}
