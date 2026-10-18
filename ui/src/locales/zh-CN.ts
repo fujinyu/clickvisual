@@ -853,6 +853,8 @@ export default {
   "systemSetting.role.table.belongResource": "所属资源",
   "systemSetting.role.table.subResources": "子资源",
   "systemSetting.role.table.acts": "准许",
+  "systemSetting.role.table.relatedUsers": "关联用户",
+  "systemSetting.role.table.instanceGrantTip": "实例级资源授权请在「实例管理」中操作",
   "systemSetting.role.filtrate.label.belongResource": "所属资源",
   "systemSetting.role.filtrate.label.name": "角色名",
   "systemSetting.role.filtrate.clear": "清空条件",

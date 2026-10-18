@@ -20,7 +20,9 @@ import {
   EditOutlined,
   ExclamationCircleOutlined,
   PlusOutlined,
+  QuestionCircleOutlined,
   SearchOutlined,
+  UsergroupAddOutlined,
 } from "@ant-design/icons";
 import { useModel } from "@umijs/max";
 import {
@@ -129,6 +131,22 @@ function PmsDefaultRoles() {
       dataIndex: "belongResource",
       key: "belongResource",
       width: 200,
+      render: (belongResource: any) => (
+        <>
+          {belongResource}
+          {belongResource === "instance" ? (
+            <Tooltip
+              title={i18n.formatMessage({
+                id: "systemSetting.role.table.instanceGrantTip",
+              })}
+            >
+              <QuestionCircleOutlined
+                style={{ marginLeft: 4, color: "rgba(0, 0, 0, 0.45)" }}
+              />
+            </Tooltip>
+          ) : null}
+        </>
+      ),
     },
     {
       title: i18n.formatMessage({
@@ -178,7 +196,7 @@ function PmsDefaultRoles() {
       }),
       key: "operating",
       valueType: "option",
-      width: 80,
+      width: 100,
       fixed: "right" as "right",
       render: (_: any, record: any) => {
         return (
@@ -205,6 +223,25 @@ function PmsDefaultRoles() {
                       return;
                     }
                     editorRole(record.id);
+                  });
+                }}
+              />
+            </Tooltip>
+            <Divider type="vertical" />
+            <Tooltip
+              title={i18n.formatMessage({
+                id: "systemSetting.role.table.relatedUsers",
+              })}
+            >
+              <UsergroupAddOutlined
+                onClick={() => {
+                  CheckRoot().then((r) => {
+                    if (r.code !== 0) {
+                      message.error(r.msg);
+                      return;
+                    }
+                    handleGrantRoleId(record.id);
+                    handleGrantRoleUserVisible(true);
                   });
                 }}
               />
@@ -395,7 +432,6 @@ function PmsDefaultRoles() {
               handleGrantRoleUserVisible(false);
               if (actionRef.current) {
                 actionRef.current.refresh();
-                location.reload();
               }
             }
           }}
