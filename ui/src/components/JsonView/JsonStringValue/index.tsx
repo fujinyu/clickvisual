@@ -86,16 +86,6 @@ const JsonStringValue = ({
     return !REG_SEPARATORS.includes(value);
   };
 
-  const isNewLine = (value: any) => {
-    let flag = false;
-    PRE_SYMBOL.map((item: string) => {
-      if (value.indexOf(item) > 0) {
-        flag = true;
-      }
-    });
-    return flag;
-  };
-
   if (strListByReg.length <= 0) return <></>;
 
   const highLightFlag = (value: string) => {
@@ -223,10 +213,8 @@ const JsonStringValue = ({
         >
           {val && val.substring(0, LOGMAXTEXTLENGTH) + "..."}
         </span>
-      ) : isNewLine(val) ? (
-        <pre className={jsonViewStyles.pre}>{jsonStringView}</pre>
       ) : (
-        <span className={jsonViewStyles.pre}>{jsonStringView}</span>
+        <pre className={jsonViewStyles.pre}>{jsonStringView}</pre>
       )}
     </>
   );

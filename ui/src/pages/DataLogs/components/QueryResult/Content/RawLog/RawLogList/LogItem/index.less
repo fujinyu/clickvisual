@@ -106,7 +106,8 @@
     .details {
       .logLine {
         .logContent,
-        .logContentHighlight {
+        .logContentHighlight,
+        .preWrap {
           overflow: visible;
           white-space: nowrap;
           word-break: normal;
@@ -125,6 +126,12 @@
 .details {
   flex: 1;
   font-size: 12px;
+
+  // 单行日志正文用 pre 承载以保留行首空格/缩进（换行仍由 pre-wrap 处理）
+  .preWrap {
+    margin: 0;
+    white-space: pre-wrap;
+  }
 
   .logLine {
     display: flex;
