@@ -1,10 +1,16 @@
 import { UserInfoType } from "@/services/systemUser";
-import { DeleteOutlined, EditOutlined, RedoOutlined } from "@ant-design/icons";
+import {
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  RedoOutlined,
+} from "@ant-design/icons";
 import { Button, message, Popconfirm, Space, Table, Tooltip } from "antd";
 import { useState } from "react";
 import { useIntl, useModel } from "umi";
 import { userListType } from "..";
 import EditUser from "./components/EditUser";
+import UserGrant from "./components/UserGrant";
 
 export interface EditUserInfoType extends UserInfoType {
   uid: number;
@@ -19,6 +25,7 @@ const UserTable = (props: {
 }) => {
   const [isEdit, setIsEdit] = useState<boolean>(false);
   const [editUserInfo, setEditUserInfo] = useState<EditUserInfoType>();
+  const [grantUser, setGrantUser] = useState<userListType | null>(null);
   const i18n = useIntl();
   const {
     dataObj,
@@ -63,6 +70,17 @@ const UserTable = (props: {
       key: "options",
       render: (_: any, record: userListType) => (
         <Space>
+          <Tooltip
+            title={i18n.formatMessage({ id: "sys.user.viewGrant" })}
+            placement="bottom"
+          >
+            <Button
+              size={"small"}
+              type={"link"}
+              icon={<EyeOutlined />}
+              onClick={() => setGrantUser(record)}
+            />
+          </Tooltip>
           <Tooltip
             title={i18n.formatMessage({ id: "sys.user.resetPassword" })}
             placement="bottom"
@@ -123,6 +141,11 @@ const UserTable = (props: {
           setIsEdit(flag);
         }}
         loadList={loadList}
+      />
+      <UserGrant
+        open={!!grantUser}
+        user={grantUser}
+        onClose={() => setGrantUser(null)}
       />
 
       <Table

@@ -3,8 +3,10 @@ import { stringify } from "qs";
 import { PermissionCheck, ReqPmsRoleGrantInfoParam } from "@/models/pms";
 import { API } from "@/services/API";
 
+// 对应后端 GET/PUT /api/v1/pms/instance/:iid/role/grant 的返回结构，
+// 字段名以 api/internal/service/permission/view.go 的 json tag 为准
 export interface PmsGrantRes {
-  aid: number;
+  iid: number;
   roles: PmsRole[];
 }
 
@@ -23,7 +25,7 @@ export interface PmsRoleDetail {
 }
 
 export interface PmsGrant {
-  created: 1;
+  created: number;
   domain: string[];
   userIds: number[];
 }
