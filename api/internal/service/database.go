@@ -2,25 +2,28 @@ package service
 
 import (
 	"sort"
-	"strconv"
 
 	"github.com/ego-component/egorm"
-	"github.com/gotomicro/ego/core/elog"
 
 	"github.com/clickvisual/clickvisual/api/internal/invoker"
 	db2 "github.com/clickvisual/clickvisual/api/internal/pkg/model/db"
 	view2 "github.com/clickvisual/clickvisual/api/internal/pkg/model/view"
-	"github.com/clickvisual/clickvisual/api/internal/service/permission"
 	"github.com/clickvisual/clickvisual/api/internal/service/permission/pmsplugin"
 )
 
 func DatabaseListFilterPms(uid int) (res []view2.RespDatabaseSimple, err error) {
 	res = make([]view2.RespDatabaseSimple, 0)
 	dMap := make(map[int]view2.RespDatabaseSimple)
+	// all database rows, so a database which is visible only through one of its
+	// tables(the old per-table cascade) can still be materialized below
+	allDbMap := make(map[int]*db2.BaseDatabase)
+	// in-memory permission summary: no per-database sql any more
+	summary := pmsplugin.GetUserViewSummary(uid)
 	// Fill in all database information and verify related permissions
 	ds, _ := db2.DatabaseList(invoker.Db, egorm.Conds{})
 	for _, d := range ds {
-		if !DatabaseViewIsPermission(uid, d.Iid, d.ID) {
+		allDbMap[d.ID] = d
+		if !summary.DatabaseSubVisible(d.Iid, d.ID) {
 			continue
 		}
 		dMap[d.ID] = view2.RespDatabaseSimple{
@@ -41,14 +44,27 @@ func DatabaseListFilterPms(uid int) (res []view2.RespDatabaseSimple, err error) 
 		if row.Database == nil {
 			continue
 		}
+		if !summary.TableSubVisible(row.Database.Iid, row.ID) {
+			continue
+		}
 		item, ok := dMap[row.Database.ID]
 		if !ok {
-			continue
+			d, exists := allDbMap[row.Database.ID]
+			if !exists {
+				continue
+			}
+			item = view2.RespDatabaseSimple{
+				Id:           d.ID,
+				Iid:          d.Iid,
+				DatabaseName: d.Name,
+				IsCreateByCV: d.IsCreateByCV,
+				Desc:         d.Desc,
+				Cluster:      d.Cluster,
+				Tables:       make([]view2.RespTableSimple, 0),
+			}
+			dMap[d.ID] = item
 		}
-		if !TableViewIsPermission(uid, row.Database.Iid, row.ID) {
-			continue
-		}
-		respTableSimple := view2.RespTableSimple{
+		item.Tables = append(item.Tables, view2.RespTableSimple{
 			Id:              row.ID,
 			Did:             row.Database.ID,
 			TableName:       row.Name,
@@ -56,8 +72,7 @@ func DatabaseListFilterPms(uid int) (res []view2.RespDatabaseSimple, err error) 
 			Desc:            row.Desc,
 			V3TableType:     row.V3TableType,
 			RelTraceTableId: row.TraceTableId,
-		}
-		item.Tables = append(item.Tables, respTableSimple)
+		})
 		dMap[row.Database.ID] = item
 	}
 	for _, v := range dMap {
@@ -69,44 +84,28 @@ func DatabaseListFilterPms(uid int) (res []view2.RespDatabaseSimple, err error) 
 	return
 }
 
+// DatabaseViewIsPermission reports whether the user may view database did(of
+// instance iid): through the instance itself, through a database-scoped grant,
+// or through a grant on one of the database's tables. Only the tables the user
+// actually holds grants on are looked up(one query at most), instead of listing
+// every table of the database once per subResource like the old cascade did.
 func DatabaseViewIsPermission(uid, iid, did int) bool {
-	if databaseViewIsPermission(uid, iid, did, pmsplugin.Log) ||
-		databaseViewIsPermission(uid, iid, did, pmsplugin.Alarm) ||
-		databaseViewIsPermission(uid, iid, did, pmsplugin.Pandas) {
+	summary := pmsplugin.GetUserViewSummary(uid)
+	if summary.DatabaseSubVisible(iid, did) {
 		return true
 	}
-	return false
-}
-
-func databaseViewIsPermission(uid, iid, did int, subResource string) bool {
-	// check database permission
-	if err := permission.Manager.CheckNormalPermission(view2.ReqPermission{
-		UserId:      uid,
-		ObjectType:  pmsplugin.PrefixInstance,
-		ObjectIdx:   strconv.Itoa(iid),
-		SubResource: subResource,
-		Acts:        []string{pmsplugin.ActView},
-		DomainType:  pmsplugin.PrefixDatabase,
-		DomainId:    strconv.Itoa(did),
-	}); err == nil {
-		elog.Debug("ReadAllPermissionInstance",
-			elog.Any("uid", uid),
-			elog.Any("step", "DatabaseViewIsPermission"),
-			elog.Any("iid", iid),
-			elog.Any("did", did),
-			elog.Any("subResource", subResource))
-		return true
+	tids := summary.GrantedTableIds(iid)
+	if len(tids) == 0 {
+		return false
 	}
-	// check databases permission
-	conds := egorm.Conds{}
-	conds["did"] = did
-	tables, err := db2.TableList(invoker.Db, conds)
+	tables, err := db2.TableList(invoker.Db, egorm.Conds{
+		"id": egorm.Cond{Op: "in", Val: tids},
+	})
 	if err != nil {
-		elog.Error("PmsCheckInstanceRead", elog.String("error", err.Error()))
 		return false
 	}
 	for _, t := range tables {
-		if tableViewIsPermission(uid, iid, t.ID, subResource) {
+		if t.Did == did && summary.TableSubVisible(iid, t.ID) {
 			return true
 		}
 	}

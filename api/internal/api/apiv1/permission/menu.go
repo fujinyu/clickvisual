@@ -1,10 +1,7 @@
 package permission
 
 import (
-	"github.com/ego-component/egorm"
-
 	"github.com/clickvisual/clickvisual/api/internal/pkg/component/core"
-	"github.com/clickvisual/clickvisual/api/internal/pkg/model/db"
 	"github.com/clickvisual/clickvisual/api/internal/service"
 	"github.com/clickvisual/clickvisual/api/internal/service/permission"
 	"github.com/clickvisual/clickvisual/api/internal/service/permission/pmsplugin"
@@ -16,20 +13,16 @@ func MenuList(c *core.Context) {
 		c.JSONOK(service.Permission.AdminMenuList())
 		return
 	}
+	// The menu only needs to know whether the user can view each subResource on
+	// at least one instance. That used to be decided by walking every instance
+	// with a db-enumerating permission check(one DatabaseList plus one TableList
+	// per database, per subResource), which took seconds on deployments with
+	// many databases. The in-memory summary answers it without any sql.
+	summary := pmsplugin.GetUserViewSummary(c.Uid())
+	logFlag := summary.AnyInstanceSub(pmsplugin.Log)
+	alarmFlag := summary.AnyInstanceSub(pmsplugin.Alarm)
+	pandasFlag := summary.AnyInstanceSub(pmsplugin.Pandas)
 	res := make([]permission.MenuTreeItem, 0)
-	ins, _ := db.InstanceList(egorm.Conds{})
-	logFlag, alarmFlag, pandasFlag := false, false, false
-	for _, row := range ins {
-		if !logFlag && service.InstanceViewPmsWithSubResource(c.Uid(), row.ID, pmsplugin.Log) {
-			logFlag = true
-		}
-		if !alarmFlag && service.InstanceViewPmsWithSubResource(c.Uid(), row.ID, pmsplugin.Alarm) {
-			alarmFlag = true
-		}
-		if !pandasFlag && service.InstanceViewPmsWithSubResource(c.Uid(), row.ID, pmsplugin.Pandas) {
-			pandasFlag = true
-		}
-	}
 	for _, p := range service.Permission.AdminMenuList() {
 		if logFlag && p.Name == "log" {
 			res = append(res, p)

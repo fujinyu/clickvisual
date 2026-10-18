@@ -450,6 +450,25 @@ func GetDomainCascaderOptions(iid int) (resp view.RespDomainCascader) {
 	if len(entWithDatabase) <= 0 {
 		return
 	}
+	// Fetch the tables of all these databases with ONE query and group them by
+	// did in memory. The old code ran one TableList per database, so with
+	// hundreds of databases this single function issued hundreds of queries
+	// (e.g. /api/v1/pms/commonInfo took seconds because of it).
+	dbIds := make([]int, 0, len(entWithDatabase))
+	for _, ent := range entWithDatabase {
+		dbIds = append(dbIds, ent.ID)
+	}
+	tables, err := db2.TableList(invoker.Db, egorm.Conds{
+		"did": egorm.Cond{Op: "in", Val: dbIds},
+	})
+	if err != nil {
+		// keep the old lenient behaviour: log and build the cascader without tables
+		elog.Error("Get tables for domain cascade selector error.", zap.Error(err))
+	}
+	tablesByDid := make(map[int][]*db2.BaseTable, len(entWithDatabase))
+	for _, t := range tables {
+		tablesByDid[t.Did] = append(tablesByDid[t.Did], t)
+	}
 	entCascade := view.CascaderItem{
 		Value:    PrefixDatabase,
 		Label:    "数据库",
@@ -461,7 +480,6 @@ func GetDomainCascaderOptions(iid int) (resp view.RespDomainCascader) {
 		Children: make([]view.CascaderItem, 0),
 	}
 	for _, ent := range entWithDatabase {
-		elog.Debug("entWithDatabase", elog.Any("ent", ent))
 		if ent.Instance == nil {
 			continue
 		}
@@ -469,18 +487,16 @@ func GetDomainCascaderOptions(iid int) (resp view.RespDomainCascader) {
 			Value: strconv.Itoa(ent.ID),
 			Label: ent.Name,
 		})
-		conds := egorm.Conds{}
-		conds["did"] = ent.ID
-		tables, _ := db2.TableList(invoker.Db, conds)
-		if len(tables) <= 0 {
+		dbTables := tablesByDid[ent.ID]
+		if len(dbTables) <= 0 {
 			continue
 		}
 		childrenEnt := view.CascaderItem{
 			Value:    strconv.Itoa(ent.ID),
 			Label:    ent.Name,
-			Children: make([]view.CascaderItem, 0),
+			Children: make([]view.CascaderItem, 0, len(dbTables)),
 		}
-		for _, env := range tables {
+		for _, env := range dbTables {
 			childrenEnt.Children = append(childrenEnt.Children, view.CascaderItem{
 				Value: strconv.Itoa(env.ID),
 				Label: env.Name,

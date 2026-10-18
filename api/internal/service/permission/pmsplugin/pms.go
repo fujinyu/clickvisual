@@ -57,6 +57,9 @@ func Invoker() {
 			enforcerLock.Lock()
 			_ = enforcer.LoadPolicy()
 			enforcerLock.Unlock()
+			// another process changed the rules: invalidate the cached
+			// view summaries of this process as well
+			bumpViewRulesVersion()
 		})
 	}
 }
@@ -327,6 +330,8 @@ func reverseSearchFurtherRules(finalResults *[]EnhancedCasbinRulesItem, reqAct s
 func AddRule(ruleType string, params ...interface{}) (bool, error) {
 	enforcerLock.Lock()
 	defer enforcerLock.Unlock()
+	// rule set is about to change: invalidate the cached view summaries
+	defer bumpViewRulesVersion()
 	switch ruleType {
 	case RuleTypeP:
 		if len(params) < 4 {
@@ -374,6 +379,8 @@ func AddRule(ruleType string, params ...interface{}) (bool, error) {
 func DelRule(ruleType string, params ...interface{}) (bool, error) {
 	enforcerLock.Lock()
 	defer enforcerLock.Unlock()
+	// rule set is about to change: invalidate the cached view summaries
+	defer bumpViewRulesVersion()
 	switch ruleType {
 	case RuleTypeP:
 		if len(params) < 4 {
@@ -835,6 +842,8 @@ func EnforcerLoadPolicy() {
 		return
 	}
 	_ = enforcer.LoadPolicy()
+	// the in-memory rule set was replaced: invalidate the cached view summaries
+	bumpViewRulesVersion()
 	elog.Debug("Casbin LoadPolicy")
 	if watcher != nil {
 		err := (*watcher).Update()

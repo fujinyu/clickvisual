@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/ego-component/egorm"
-	"github.com/gotomicro/ego/core/elog"
 	"github.com/pkg/errors"
 
 	"github.com/clickvisual/clickvisual/api/internal/service/inquiry/local"
@@ -24,7 +23,6 @@ import (
 	"github.com/clickvisual/clickvisual/api/internal/service/inquiry/clickhouse"
 	"github.com/clickvisual/clickvisual/api/internal/service/inquiry/databend"
 	"github.com/clickvisual/clickvisual/api/internal/service/inquiry/factory"
-	"github.com/clickvisual/clickvisual/api/internal/service/permission"
 	"github.com/clickvisual/clickvisual/api/internal/service/permission/pmsplugin"
 )
 
@@ -176,35 +174,12 @@ func InstanceViewIsPermission(uid, iid int) bool {
 }
 
 func InstanceViewPmsWithSubResource(uid int, iid int, subResource string) bool {
-	// check instance permission
-	if err := permission.Manager.CheckNormalPermission(view.ReqPermission{
-		UserId:      uid,
-		ObjectType:  pmsplugin.PrefixInstance,
-		ObjectIdx:   strconv.Itoa(iid),
-		SubResource: subResource,
-		Acts:        []string{pmsplugin.ActView},
-	}); err == nil {
-		elog.Debug("ReadAllPermissionInstance",
-			elog.Any("uid", uid),
-			elog.Any("step", "InstanceViewIsPermission"),
-			elog.Any("iid", iid),
-			elog.Any("subResource", subResource))
-		return true
-	}
-	// check databases permission
-	conds := egorm.Conds{}
-	conds["iid"] = iid
-	databases, err := db.DatabaseList(invoker.Db, conds)
-	if err != nil {
-		elog.Error("PmsCheckInstanceRead", elog.String("error", err.Error()))
-		return false
-	}
-	for _, d := range databases {
-		if databaseViewIsPermission(uid, iid, d.ID, subResource) {
-			return true
-		}
-	}
-	return false
+	// In-memory summary, no db enumeration: the old implementation listed every
+	// database of the instance(and every table of each database) with sql once
+	// per subResource, which made menu/instance endpoints take seconds on
+	// deployments with many databases. See pmsplugin.GetUserViewSummary for why
+	// the user's own g-rule domains are enough.
+	return pmsplugin.GetUserViewSummary(uid).InstanceSubVisible(iid, subResource)
 }
 
 func ClickHouseLink(dsn string) (conn *sql.DB, err error) {

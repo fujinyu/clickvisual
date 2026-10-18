@@ -2,9 +2,7 @@ package service
 
 import (
 	"encoding/json"
-	"strconv"
 
-	"github.com/gotomicro/ego/core/elog"
 	"github.com/pkg/errors"
 
 	"github.com/clickvisual/clickvisual/api/internal/invoker"
@@ -12,45 +10,16 @@ import (
 	"github.com/clickvisual/clickvisual/api/internal/pkg/model/db"
 	"github.com/clickvisual/clickvisual/api/internal/pkg/model/view"
 	"github.com/clickvisual/clickvisual/api/internal/pkg/utils/mapping"
-	"github.com/clickvisual/clickvisual/api/internal/service/permission"
 	"github.com/clickvisual/clickvisual/api/internal/service/permission/pmsplugin"
 )
 
 func TableViewIsPermission(uid, iid, tid int) bool {
-	if tableViewIsPermission(uid, iid, tid, pmsplugin.Log) ||
-		tableViewIsPermission(uid, iid, tid, pmsplugin.Alarm) ||
-		tableViewIsPermission(uid, iid, tid, pmsplugin.Pandas) {
-		return true
-	}
-	return false
+	// in-memory summary, no db enumeration(see pmsplugin.GetUserViewSummary)
+	return pmsplugin.GetUserViewSummary(uid).TableSubVisible(iid, tid)
 }
 
 func tableViewIsPermission(uid, iid, tid int, subResource string) bool {
-	// check database permission
-	if err := permission.Manager.CheckNormalPermission(view.ReqPermission{
-		UserId:      uid,
-		ObjectType:  pmsplugin.PrefixInstance,
-		ObjectIdx:   strconv.Itoa(iid),
-		SubResource: subResource,
-		Acts:        []string{pmsplugin.ActView},
-		DomainType:  pmsplugin.PrefixTable,
-		DomainId:    strconv.Itoa(tid),
-	}); err == nil {
-		elog.Debug("ReadAllPermissionInstance",
-			elog.Any("uid", uid),
-			elog.Any("step", "DatabaseViewIsPermission"),
-			elog.Any("iid", iid),
-			elog.Any("tid", tid),
-			elog.Any("subResource", subResource))
-		return true
-	}
-	elog.Warn("ReadAllPermissionInstance",
-		elog.Any("uid", uid),
-		elog.Any("step", "DatabaseViewIsPermission"),
-		elog.Any("iid", iid),
-		elog.Any("tid", tid),
-		elog.Any("subResource", subResource))
-	return false
+	return pmsplugin.GetUserViewSummary(uid).TableSubResourceVisible(iid, tid, subResource)
 }
 
 func IsCheckInner(createType int) bool {
