@@ -36,7 +36,26 @@ type logLibraryCopyResult struct {
 	// Fixed lists the log libraries whose structure was rebuilt to the
 	// standard collection structure (log_id/time_ns as Int64) while copying.
 	Fixed []string `json:"fixed"`
+	// SkippedLeftover lists the log libraries that were skipped because the
+	// target database still holds physical tables of the same name without
+	// any ClickVisual metadata (leftovers of an earlier attempt). They block
+	// the copy and must be dropped first.
+	SkippedLeftover []string `json:"skippedLeftover"`
 }
+
+// copyOutcome reports what happened to one log library of the batch.
+type copyOutcome int
+
+const (
+	// copyOutcomeDone means the log library was copied as-is.
+	copyOutcomeDone copyOutcome = iota
+	// copyOutcomeFixed means the log library was copied and its collection
+	// structure was rebuilt to the standard Int64 layout.
+	copyOutcomeFixed
+	// copyOutcomeExists means the target database already holds the physical
+	// tables of this log library, so it was skipped without touching them.
+	copyOutcomeExists
+)
 
 // LogLibraryCopy recreates the selected log libraries of the source database
 // under the target database. Log libraries whose name already exists in the
@@ -119,10 +138,11 @@ func LogLibraryCopy(c *core.Context) {
 		return
 	}
 	result := logLibraryCopyResult{
-		Total:   len(req.TableIds),
-		Skipped: make([]string, 0),
-		Failed:  make([]string, 0),
-		Fixed:   make([]string, 0),
+		Total:           len(req.TableIds),
+		Skipped:         make([]string, 0),
+		SkippedLeftover: make([]string, 0),
+		Failed:          make([]string, 0),
+		Fixed:           make([]string, 0),
 	}
 	for _, id := range req.TableIds {
 		sourceTable, ok := sourceTableMap[id]
@@ -134,13 +154,22 @@ func LogLibraryCopy(c *core.Context) {
 			result.Skipped = append(result.Skipped, sourceTable.Name)
 			continue
 		}
-		fixed, err := copyLogLibrary(c.Uid(), sourceTable, sourceDatabase, targetDatabase, sourceOp, targetOp)
+		outcome, err := copyLogLibrary(c.Uid(), sourceTable, sourceDatabase, targetDatabase, sourceOp, targetOp)
 		if err != nil {
 			elog.Error("copyLogLibrary", elog.String("table", sourceTable.Name), elog.FieldErr(err))
 			result.Failed = append(result.Failed, sourceTable.Name)
 			continue
 		}
-		if fixed {
+		switch outcome {
+		case copyOutcomeExists:
+			// The target database still holds the physical tables of this log
+			// library without ClickVisual metadata (leftovers of an earlier
+			// attempt), so the copy is skipped: dropping them implicitly
+			// would be destructive, and IF NOT EXISTS would keep their stale
+			// structure instead of the source one.
+			result.SkippedLeftover = append(result.SkippedLeftover, sourceTable.Name)
+			continue
+		case copyOutcomeFixed:
 			result.Fixed = append(result.Fixed, sourceTable.Name)
 		}
 		targetTableNames[sourceTable.Name] = true
@@ -164,14 +193,26 @@ func LogLibraryCopy(c *core.Context) {
 // source log library would benefit from the "rebuild collection structure"
 // action (legacy Float64 log_id/time_ns), the copy is rebuilt to the standard
 // Int64 structure on the target database instead of inheriting the legacy one.
-// It reports whether the structure was rebuilt.
-func copyLogLibrary(uid int, sourceTable *db.BaseTable, sourceDatabase, targetDatabase db.BaseDatabase, sourceOp, targetOp factory.Operator) (bool, error) {
+// It reports whether the structure was rebuilt or the log library was
+// skipped because the target database already holds its physical tables.
+func copyLogLibrary(uid int, sourceTable *db.BaseTable, sourceDatabase, targetDatabase db.BaseDatabase, sourceOp, targetOp factory.Operator) (copyOutcome, error) {
 	refs, err := logLibraryPhysicalTableRefs(*sourceTable, sourceDatabase.Name, sourceTable.Name)
 	if err != nil {
-		return false, errors.Wrap(err, "resolve physical tables")
+		return copyOutcomeDone, errors.Wrap(err, "resolve physical tables")
 	}
 	if len(refs) == 0 {
-		return false, errors.Errorf("no physical table resolved for %s", sourceTable.Name)
+		return copyOutcomeDone, errors.Errorf("no physical table resolved for %s", sourceTable.Name)
+	}
+	// A previous attempt may have left physical tables behind (e.g. the
+	// connection broke after ClickHouse had applied the DDL). Skip the log
+	// library in that case instead of failing every statement with
+	// "table already exists".
+	exists, err := targetPhysicalTablesExist(targetOp, targetDatabase.Name, refs)
+	if err != nil {
+		return copyOutcomeDone, errors.Wrap(err, "check target physical tables")
+	}
+	if exists {
+		return copyOutcomeExists, nil
 	}
 	ddlByRole := make(map[string]string, len(refs))
 	created := make([]logLibraryPhysicalTableRef, 0, len(refs))
@@ -179,12 +220,16 @@ func copyLogLibrary(uid int, sourceTable *db.BaseTable, sourceDatabase, targetDa
 		ddl, ddlErr := sourceOp.GetCreateSQL(ref.Database, ref.Table)
 		if ddlErr != nil {
 			rollbackCopiedLogLibrary(targetOp, targetDatabase, 0, created)
-			return false, errors.Wrapf(ddlErr, "read ddl of %s", ref.Name)
+			return copyOutcomeDone, errors.Wrapf(ddlErr, "read ddl of %s", ref.Name)
 		}
 		ddl = rewriteLogLibraryCopyDDL(ddl, sourceDatabase, targetDatabase, sourceTable.Name)
 		if _, execErr := targetOp.DoSQL(ddl); execErr != nil {
+			// The statement may have been applied even though reading the
+			// response failed (e.g. a broken connection), so include the ref
+			// in the rollback; the drop is idempotent when it was not.
+			created = append(created, ref)
 			rollbackCopiedLogLibrary(targetOp, targetDatabase, 0, created)
-			return false, errors.Wrapf(execErr, "create %s", ref.Name)
+			return copyOutcomeDone, errors.Wrapf(execErr, "create %s", ref.Name)
 		}
 		created = append(created, ref)
 		ddlByRole[ref.Role] = ddl
@@ -219,12 +264,12 @@ func copyLogLibrary(uid int, sourceTable *db.BaseTable, sourceDatabase, targetDa
 	}
 	if err = db.TableCreate(tx, &targetTable); err != nil {
 		tx.Rollback()
-		return false, errors.WithMessage(err, "TableCreateFailed")
+		return copyOutcomeDone, errors.WithMessage(err, "TableCreateFailed")
 	}
 	indexes, err := db.IndexList(egorm.Conds{"tid": sourceTable.ID})
 	if err != nil {
 		tx.Rollback()
-		return false, errors.Wrap(err, "load analysis fields")
+		return copyOutcomeDone, errors.Wrap(err, "load analysis fields")
 	}
 	for _, index := range indexes {
 		if err = db.IndexCreate(tx, &db.BaseIndex{
@@ -237,7 +282,7 @@ func copyLogLibrary(uid int, sourceTable *db.BaseTable, sourceDatabase, targetDa
 			Kind:     index.Kind,
 		}); err != nil {
 			tx.Rollback()
-			return false, errors.WithMessage(err, "IndexCreateFailed")
+			return copyOutcomeDone, errors.WithMessage(err, "IndexCreateFailed")
 		}
 	}
 	attach := db.BaseTableAttach{Tid: sourceTable.ID}
@@ -249,11 +294,11 @@ func copyLogLibrary(uid int, sourceTable *db.BaseTable, sourceDatabase, targetDa
 		}
 		if err = newAttach.Create(tx); err != nil {
 			tx.Rollback()
-			return false, errors.WithMessage(err, "AttachCreateFailed")
+			return copyOutcomeDone, errors.WithMessage(err, "AttachCreateFailed")
 		}
 	}
 	if err = tx.Commit().Error; err != nil {
-		return false, err
+		return copyOutcomeDone, err
 	}
 	// The replayed copy carries the source structure as-is. When the source
 	// still uses the legacy Float64 log_id/time_ns, rebuild the copy on the
@@ -262,21 +307,21 @@ func copyLogLibrary(uid int, sourceTable *db.BaseTable, sourceDatabase, targetDa
 	needsFix, fixErr := logLibraryStructureNeedsFix(sourceOp, sourceTable, sourceDatabase.Name)
 	if fixErr != nil {
 		rollbackCopiedLogLibrary(targetOp, targetDatabase, targetTable.ID, refs)
-		return false, errors.Wrap(fixErr, "check collection structure")
+		return copyOutcomeDone, errors.Wrap(fixErr, "check collection structure")
 	}
 	if !needsFix {
-		return false, nil
+		return copyOutcomeDone, nil
 	}
 	rebuilder, ok := targetOp.(factory.StorageRebuilder)
 	if !ok {
 		rollbackCopiedLogLibrary(targetOp, targetDatabase, targetTable.ID, refs)
-		return false, errors.New("target datasource does not support storage rebuild")
+		return copyOutcomeDone, errors.New("target datasource does not support storage rebuild")
 	}
 	if _, err = rebuilder.RebuildStorageInt64(targetTable.ID); err != nil {
 		rollbackCopiedLogLibrary(targetOp, targetDatabase, targetTable.ID, refs)
-		return false, errors.Wrap(err, "rebuild collection structure")
+		return copyOutcomeDone, errors.Wrap(err, "rebuild collection structure")
 	}
-	return true, nil
+	return copyOutcomeFixed, nil
 }
 
 // logLibraryStructureNeedsFix reports whether the "rebuild collection
@@ -381,7 +426,43 @@ func rewriteLogLibraryCopyDDL(ddl string, sourceDatabase, targetDatabase db.Base
 	// The Kafka consumer group defaults to "{database}_{table}"; re-point it at
 	// the target database so the copy consumes the topic independently instead
 	// of competing with the source table for messages.
-	return rewriteLogLibraryCopyKafkaGroup(ddl, targetDatabase.Name, table)
+	ddl = rewriteLogLibraryCopyKafkaGroup(ddl, targetDatabase.Name, table)
+	// SHOW CREATE TABLE does not emit IF NOT EXISTS, and the datasource retries
+	// a statement once when the response read fails (e.g. a broken
+	// connection), so the replayed DDL must be idempotent or the retry fails
+	// with "table already exists" even though the first attempt succeeded.
+	return makeDDLIdempotent(ddl)
+}
+
+var logLibraryCreatePrefixRE = regexp.MustCompile(`(?is)^(\s*CREATE\s+(?:MATERIALIZED\s+VIEW|TABLE)\s+)(IF\s+NOT\s+EXISTS\s+)?`)
+
+// makeDDLIdempotent turns a CREATE TABLE / CREATE MATERIALIZED VIEW statement
+// into its IF NOT EXISTS form. Statements that already carry the clause, and
+// anything that is not a create statement, are returned unchanged.
+func makeDDLIdempotent(ddl string) string {
+	match := logLibraryCreatePrefixRE.FindStringSubmatch(ddl)
+	if match == nil || match[2] != "" {
+		return ddl
+	}
+	return match[1] + "IF NOT EXISTS " + ddl[len(match[1]):]
+}
+
+// targetPhysicalTablesExist reports whether any physical table of the log
+// library already exists on the target instance. The names are the source
+// table names, which the copy keeps; only the database differs.
+func targetPhysicalTablesExist(targetOp factory.Operator, targetDatabase string, refs []logLibraryPhysicalTableRef) (bool, error) {
+	names := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		names = append(names, ref.Table)
+	}
+	query := fmt.Sprintf(
+		"SELECT name FROM system.tables WHERE database = '%s' AND name IN ('%s')",
+		targetDatabase, strings.Join(names, "','"))
+	res, err := targetOp.DoSQL(query)
+	if err != nil {
+		return false, err
+	}
+	return len(res.Logs) > 0, nil
 }
 
 func rewriteLogLibraryCopyKafkaGroup(ddl, targetDatabase, table string) string {

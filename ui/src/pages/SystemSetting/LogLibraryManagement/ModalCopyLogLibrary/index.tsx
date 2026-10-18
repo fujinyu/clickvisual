@@ -205,7 +205,11 @@ const ModalCopyLogLibrary = (props: {
         {result && (
           <Alert
             style={{ marginBottom: 12 }}
-            type={result.failedCount > 0 ? "warning" : "success"}
+            type={
+              result.failedCount > 0 || result.skippedLeftover.length > 0
+                ? "warning"
+                : "success"
+            }
             showIcon
             message={
               <div className={styles.resultMessage}>
@@ -219,6 +223,13 @@ const ModalCopyLogLibrary = (props: {
                   <span>
                     {t("logLibraryManagement.copy.resultSkipped", {
                       count: result.skipped.length,
+                    })}
+                  </span>
+                )}
+                {result.skippedLeftover.length > 0 && (
+                  <span className={styles.resultFixed}>
+                    {t("logLibraryManagement.copy.resultSkippedLeftover", {
+                      count: result.skippedLeftover.length,
                     })}
                   </span>
                 )}
@@ -239,12 +250,22 @@ const ModalCopyLogLibrary = (props: {
               </div>
             }
             description={
-              result.failed.length > 0 ? (
-                <div className={styles.resultFailedList}>
-                  <div>{t("logLibraryManagement.copy.failedList")}</div>
-                  <div>{result.failed.join("、")}</div>
-                </div>
-              ) : undefined
+              <div className={styles.resultFailedList}>
+                {result.failed.length > 0 && (
+                  <>
+                    <div>{t("logLibraryManagement.copy.failedList")}</div>
+                    <div>{result.failed.join("、")}</div>
+                  </>
+                )}
+                {result.skippedLeftover.length > 0 && (
+                  <>
+                    <div>
+                      {t("logLibraryManagement.copy.skippedLeftoverList")}
+                    </div>
+                    <div>{result.skippedLeftover.join("、")}</div>
+                  </>
+                )}
+              </div>
             }
           />
         )}

@@ -3,8 +3,9 @@ import { PaneType } from "@/models/datalogs/types";
 import rawLogsOperationsStyles from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogsOperations/index.less";
 import HistogramSwitch from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogsOperations/SwitchLeft";
 import { useModel } from "@umijs/max";
-import { Pagination } from "antd";
-import { useMemo } from "react";
+import { DownloadOutlined, FileTextOutlined } from "@ant-design/icons";
+import { Button, message, Pagination } from "antd";
+import { useMemo, useState } from "react";
 import { useIntl } from "umi";
 
 const RawLogsOperations = ({ oldPane }: { oldPane: PaneType | undefined }) => {
@@ -18,10 +19,46 @@ const RawLogsOperations = ({ oldPane }: { oldPane: PaneType | undefined }) => {
     onChangeLogPane,
     logPanesHelper,
     resetLogPaneLogsAndHighCharts,
+    downloadLogs,
   } = useModel("dataLogs");
   const { logPanes } = logPanesHelper;
 
   const i18n = useIntl();
+
+  const [downloading, setDownloading] = useState<"json" | "raw" | null>(null);
+
+  const handleDownload = async (format: "json" | "raw") => {
+    if (downloading) return;
+    setDownloading(format);
+    try {
+      const result = await downloadLogs(format);
+      if (result.count === 0) {
+        message.warning(i18n.formatMessage({ id: "log.download.empty" }));
+      } else if (result.truncated) {
+        message.warning(
+          i18n.formatMessage(
+            { id: "log.download.truncated" },
+            { count: result.count }
+          )
+        );
+      } else {
+        message.success(
+          i18n.formatMessage(
+            { id: "log.download.success" },
+            { count: result.count }
+          )
+        );
+      }
+    } catch (error) {
+      message.error(
+        error instanceof Error && error.message
+          ? error.message
+          : i18n.formatMessage({ id: "log.download.failed" })
+      );
+    } finally {
+      setDownloading(null);
+    }
+  };
 
   const performTime = useMemo(() => {
     return logPanes[currentLogLibrary?.id || 0]?.logs?.cost;
@@ -42,6 +79,24 @@ const RawLogsOperations = ({ oldPane }: { oldPane: PaneType | undefined }) => {
     <div className={rawLogsOperationsStyles.rawLogsOperationsMain}>
       <div className={rawLogsOperationsStyles.operationsBtn}>
         <HistogramSwitch oldPane={oldPane} />
+        <Button
+          size="small"
+          type="text"
+          icon={<DownloadOutlined />}
+          loading={downloading === "json"}
+          disabled={!!downloading && downloading !== "json"}
+          title={i18n.formatMessage({ id: "log.download.json" })}
+          onClick={() => handleDownload("json")}
+        />
+        <Button
+          size="small"
+          type="text"
+          icon={<FileTextOutlined />}
+          loading={downloading === "raw"}
+          disabled={!!downloading && downloading !== "raw"}
+          title={i18n.formatMessage({ id: "log.download.raw" })}
+          onClick={() => handleDownload("raw")}
+        />
       </div>
       {performTime ? (
         <div className={rawLogsOperationsStyles.duration}>

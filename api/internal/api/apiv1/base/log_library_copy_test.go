@@ -70,8 +70,8 @@ func TestRewriteLogLibraryCopyDDLDropsClusterClauseForStandaloneTarget(t *testin
 	if strings.Contains(got, "ON CLUSTER") {
 		t.Fatalf("expected the ON CLUSTER clause to be dropped, got %q", got)
 	}
-	if !strings.Contains(got, "CREATE TABLE cv_logs_bak.test (`x` String)") {
-		t.Fatalf("expected the database to be rewritten, got %q", got)
+	if !strings.Contains(got, "CREATE TABLE IF NOT EXISTS cv_logs_bak.test (`x` String)") {
+		t.Fatalf("expected the database to be rewritten and the ddl to be idempotent, got %q", got)
 	}
 }
 
@@ -84,6 +84,53 @@ func TestRewriteLogLibraryCopyDDLRewritesKafkaConsumerGroup(t *testing.T) {
 	}
 	if !strings.Contains(got, "kafka_topic_list = 'topic'") {
 		t.Fatalf("expected the kafka topic to stay unchanged, got %q", got)
+	}
+}
+
+func TestRewriteLogLibraryCopyDDLIsIdempotent(t *testing.T) {
+	// SHOW CREATE TABLE never emits IF NOT EXISTS, but the datasource retries
+	// a statement once when the response read fails, so the replayed DDL must
+	// not fail the retry with "table already exists".
+	cases := []struct {
+		name     string
+		ddl      string
+		expected string
+	}{
+		{
+			name:     "create table",
+			ddl:      "CREATE TABLE cv_logs.test (`x` String) ENGINE = MergeTree ORDER BY x",
+			expected: "CREATE TABLE IF NOT EXISTS cv_logs.test (`x` String) ENGINE = MergeTree ORDER BY x",
+		},
+		{
+			name:     "create materialized view",
+			ddl:      "CREATE MATERIALIZED VIEW `cv_logs`.`test_view` TO `cv_logs`.`test_local` AS SELECT 1",
+			expected: "CREATE MATERIALIZED VIEW IF NOT EXISTS `cv_logs`.`test_view` TO `cv_logs`.`test_local` AS SELECT 1",
+		},
+		{
+			name:     "already idempotent create table",
+			ddl:      "CREATE TABLE IF NOT EXISTS cv_logs.test (`x` String) ENGINE = MergeTree ORDER BY x",
+			expected: "CREATE TABLE IF NOT EXISTS cv_logs.test (`x` String) ENGINE = MergeTree ORDER BY x",
+		},
+		{
+			name:     "already idempotent create view",
+			ddl:      "CREATE MATERIALIZED VIEW  IF NOT EXISTS `cv_logs`.`test_view` TO `cv_logs`.`test_local` AS SELECT 1",
+			expected: "CREATE MATERIALIZED VIEW  IF NOT EXISTS `cv_logs`.`test_view` TO `cv_logs`.`test_local` AS SELECT 1",
+		},
+		{
+			name:     "lower case keywords",
+			ddl:      "create table cv_logs.test (`x` String) ENGINE = MergeTree ORDER BY x",
+			expected: "create table IF NOT EXISTS cv_logs.test (`x` String) ENGINE = MergeTree ORDER BY x",
+		},
+		{
+			name:     "not a create statement",
+			ddl:      "ALTER TABLE cv_logs.test ADD COLUMN y String",
+			expected: "ALTER TABLE cv_logs.test ADD COLUMN y String",
+		},
+	}
+	for _, c := range cases {
+		if got := makeDDLIdempotent(c.ddl); got != c.expected {
+			t.Fatalf("%s: makeDDLIdempotent() = %q, want %q", c.name, got, c.expected)
+		}
 	}
 }
 

@@ -149,6 +149,10 @@ export default {
   "logLibraryManagement.copy.resultSuccess": "Copied {copied}/{total} log libraries",
   "logLibraryManagement.copy.resultSkipped":
     "{count} skipped (same name already exists in the target database)",
+  "logLibraryManagement.copy.resultSkippedLeftover":
+    "{count} skipped (leftover physical tables with the same name exist in the target database; drop them before copying)",
+  "logLibraryManagement.copy.skippedLeftoverList":
+    "Leftover physical tables (drop them in the target database, then retry):",
   "logLibraryManagement.copy.resultFailed": "{count} failed",
   "logLibraryManagement.copy.resultFixed":
     "{count} rebuilt to the standard collection structure (log_id/time_ns → Int64)",
@@ -633,6 +637,15 @@ export default {
   "log.item.copy.failed": "Replication failed. Please manually copy the data",
   "log.item.moreTag": "View more logs",
   "log.perform.time": "Perform time-consuming",
+
+  // Log download
+  "log.download.json": "Download JSON",
+  "log.download.raw": "Download raw log",
+  "log.download.success": "Downloaded {count} logs",
+  "log.download.empty": "No logs to download for current query",
+  "log.download.truncated": "Reached download limit, only first {count} logs downloaded",
+  "log.download.failed": "Log download failed",
+  "log.download.noLibrary": "Select a log library first",
 
   // JsonView
   "log.JsonView.unfoldTip": "Please expand and then click",

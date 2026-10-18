@@ -146,6 +146,10 @@ export default {
   "logLibraryManagement.copy.resultSuccess": "成功复制 {copied}/{total} 个日志库",
   "logLibraryManagement.copy.resultSkipped":
     "跳过 {count} 个（目标数据库已存在同名日志库）",
+  "logLibraryManagement.copy.resultSkippedLeftover":
+    "跳过 {count} 个（目标数据库存在同名物理表残留，请先清理后再复制）",
+  "logLibraryManagement.copy.skippedLeftoverList":
+    "残留物理表（需在目标库手动 DROP 后重试）：",
   "logLibraryManagement.copy.resultFailed": "失败 {count} 个",
   "logLibraryManagement.copy.resultFixed":
     "已按采集结构标准修正 {count} 个（log_id/time_ns → Int64）",
@@ -598,6 +602,15 @@ export default {
   "log.item.copy.failed": "复制失败，请手动复制",
   "log.item.moreTag": "查看更多日志信息",
   "log.perform.time": "执行耗时",
+
+  // 日志下载
+  "log.download.json": "下载 JSON",
+  "log.download.raw": "下载原始日志",
+  "log.download.success": "已下载 {count} 条日志",
+  "log.download.empty": "当前查询无日志可下载",
+  "log.download.truncated": "已达下载上限，仅下载前 {count} 条日志",
+  "log.download.failed": "日志下载失败",
+  "log.download.noLibrary": "请先选择日志库",
 
   // JsonView
   "log.JsonView.unfoldTip": "请先展开再点击~",

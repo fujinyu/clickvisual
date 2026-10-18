@@ -26,6 +26,12 @@ import api, {
   LogsResponse,
   TablesResponse,
 } from "@/services/dataLogs";
+import {
+  compressToBlob,
+  downloadBlobFile,
+  formatDownloadedLogs,
+  formatRawLogsToLineDelimited,
+} from "@/utils/logDownload";
 import { currentTimeStamp } from "@/utils/momentUtils";
 import { formatMessage } from "@@/plugin-locale/localeExports";
 import { message } from "antd";
@@ -45,6 +51,10 @@ const SharePath = [
   process.env.PUBLIC_PATH + "share",
   process.env.PUBLIC_PATH + "share/",
 ];
+
+// 下载抓取分页大小与最大行数上限
+const DOWNLOAD_LOG_PAGE_SIZE = 200;
+const DOWNLOAD_LOG_ROW_LIMIT = 10000;
 
 const DataLogsModel = () => {
   // 查询关键字
@@ -659,10 +669,99 @@ const DataLogsModel = () => {
     }
   };
 
+  // 收集与当前查询条件一致的日志过滤器（复用 doGetLogsAndHighCharts 的过滤逻辑）
+  const collectDownloadFilters = async (id: number): Promise<string[]> => {
+    if (isShare) return [];
+    const filterDisableIds =
+      JSON.parse(
+        localStorage.getItem(LocalModuleType.datalogsFilterDisableIds) || "{}"
+      ) || {};
+    const oldIds: any[] =
+      filterDisableIds && filterDisableIds[id] ? filterDisableIds[id] : [];
+    const res: any = await api.getLogFilterList({
+      tableId: id,
+      collectType: CollectType.allFilter,
+    });
+    if (res?.code !== 0) return [];
+    const filters: string[] = [];
+    res.data?.forEach((item: LogFilterType) => {
+      const key = item.statement.split(" ")[0];
+      if (oldIds.indexOf(item.id) === -1 && columsList?.includes(key)) {
+        filters.push(item.statement);
+      }
+    });
+    return filters;
+  };
+
+  // 按当前查询条件抓取全部命中日志，序列化并压缩下载。返回抓取样例信息供上层提示。
+  const downloadLogs = async (
+    format: "json" | "raw"
+  ): Promise<{ count: number; total: number; truncated: boolean }> => {
+    const id = currentLogLibrary?.id;
+    if (!id) {
+      throw new Error(formatMessage({ id: "log.download.noLibrary" }));
+    }
+    const st = startDateTime as number;
+    const et = endDateTime as number;
+    const filters = await collectDownloadFilters(id);
+    const collected: Array<Record<string, unknown>> = [];
+    let total = 0;
+    let page = FIRST_PAGE;
+    while (collected.length < DOWNLOAD_LOG_ROW_LIMIT) {
+      const requestPageSize = Math.min(
+        DOWNLOAD_LOG_PAGE_SIZE,
+        DOWNLOAD_LOG_ROW_LIMIT - collected.length
+      );
+      const res: any = await api.getLogs(
+        id,
+        {
+          st,
+          et,
+          query: keywordInput,
+          pageSize: requestPageSize,
+          page,
+          by: orderBy,
+          filters,
+          isQueryCount: 1,
+        } as any,
+        new CancelToken(() => {})
+      );
+      if (res?.code !== 0) {
+        throw new Error(
+          res?.msg || formatMessage({ id: "log.download.failed" })
+        );
+      }
+      total = Number(res.data?.count) > 0 ? Number(res.data.count) : total;
+      const batch = Array.isArray(res.data?.logs) ? res.data.logs : [];
+      if (batch.length === 0) break;
+      collected.push(...batch);
+      if (batch.length < requestPageSize) break;
+      if (total > 0 && collected.length >= total) break;
+      page += 1;
+    }
+    const logs = collected.slice(0, DOWNLOAD_LOG_ROW_LIMIT);
+    const text =
+      format === "json"
+        ? formatDownloadedLogs(logs)
+        : formatRawLogsToLineDelimited(logs);
+    const tableName = currentLogLibrary?.tableName || "logs";
+    const stamp = dayjs().format("YYYYMMDD-HHmmss");
+    const { blob, extension } = await compressToBlob(
+      text,
+      format === "json" ? "application/json" : "text/plain",
+      format === "json" ? ".json" : ".log"
+    );
+    downloadBlobFile(`${tableName}_${stamp}${extension}`, blob);
+    return {
+      count: logs.length,
+      total: total || logs.length,
+      truncated: (total || 0) > logs.length,
+    };
+  };
+
   const doGetDatabaseList = (selectedInstance?: number) => {
     getDatabases.run(selectedInstance);
   };
-
   const doParseQuery = (keyword?: string) => {
     const isInterface = (keyword || keywordInput || "")?.indexOf(" and ") > 0;
 
@@ -872,6 +971,7 @@ const DataLogsModel = () => {
     doGetLogs,
     doGetHighCharts,
     doGetLogsAndHighCharts,
+    downloadLogs,
     // doGetLogLibraryList,
     doGetDatabaseList,
 
