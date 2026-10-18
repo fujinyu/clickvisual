@@ -77,6 +77,15 @@ type StorageRebuilder interface {
 	RebuildStorageInt64(tid int) (string, error)
 }
 
+// DDLExecutor 可选接口：通过 database/sql Exec 执行 DDL 语句。
+// clickhouse-go 的 Query 路径（Operator.DoSQL）在读“成功”的 DDL 响应时会 EOF
+// （ClickHouse 24.3 实测：SELECT 正常、DDL 报错能正常返回、DDL 成功必 EOF 且语句
+// 实际已执行），因此 DDL 重放/回滚必须走 Exec，不能走 DoSQL。
+type DDLExecutor interface {
+	// ExecSQL 执行一条 DDL 语句（CREATE/DROP/ALTER 等），不返回结果集。
+	ExecSQL(sql string) error
+}
+
 func TagsToString(alarm *db.Alarm, isMV bool, filterId int) string {
 	tags := alarm.Tags
 	if alarm.Tags == nil || len(alarm.Tags) == 0 {

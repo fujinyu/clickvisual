@@ -35,10 +35,18 @@ import (
 )
 
 var _ factory.Operator = (*ClickHouseX)(nil)
+var _ factory.DDLExecutor = (*ClickHouseX)(nil)
 
 type ClickHouseX struct {
 	id int
 	db *sql.DB
+}
+
+// ExecSQL 通过 database/sql Exec 执行 DDL。DoSQL 走 Query 路径，在读“成功”的
+// DDL 响应时会 EOF（ClickHouse 24.3 实测，语句实际已执行），故 DDL 一律走本方法。
+func (c *ClickHouseX) ExecSQL(sql string) error {
+	_, err := c.db.Exec(sql)
+	return err
 }
 
 func NewClickHouse(db *sql.DB, ins *db.BaseInstance) (*ClickHouseX, error) {

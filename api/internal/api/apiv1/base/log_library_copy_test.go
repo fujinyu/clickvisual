@@ -152,6 +152,24 @@ func TestRewriteLogLibraryCopyNames(t *testing.T) {
 	}
 }
 
+func TestRollbackDropSQLUsesTargetDatabase(t *testing.T) {
+	// The rollback drops the tables the copy created under the TARGET
+	// database; refs still carry the SOURCE database, which must not leak
+	// into the drop statement (it would drop unrelated tables there).
+	ref := logLibraryPhysicalTableRef{Database: "cv_logs", Table: "test_local", Name: "cv_logs.test_local", Role: "data"}
+	got := rollbackDropSQL(db.BaseDatabase{Name: "cv_logs_bak"}, ref)
+	if got != "DROP TABLE IF EXISTS `cv_logs_bak`.`test_local`" {
+		t.Fatalf("expected the drop to target the target database, got %q", got)
+	}
+	if strings.Contains(got, "`cv_logs`.") {
+		t.Fatalf("the drop must not reference the source database, got %q", got)
+	}
+	clustered := rollbackDropSQL(db.BaseDatabase{Name: "cv_logs_bak", Cluster: "logs_bak"}, ref)
+	if clustered != "DROP TABLE IF EXISTS `cv_logs_bak`.`test_local` ON CLUSTER 'logs_bak'" {
+		t.Fatalf("expected the drop to fan out on the target cluster, got %q", clustered)
+	}
+}
+
 func TestLogLibraryIsKafkaPipeline(t *testing.T) {
 	pipeline := []int{constx.TableCreateTypeCV, constx.TableCreateTypeJSONEachRow, constx.TableCreateTypeUBW, constx.TableCreateTypeJSONAsString}
 	for _, createType := range pipeline {

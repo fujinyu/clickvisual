@@ -27,12 +27,20 @@ import (
 )
 
 var _ factory.Operator = (*Databend)(nil)
+var _ factory.DDLExecutor = (*Databend)(nil)
 
 type Databend struct {
 	id   int
 	mode int
 	rs   int // replica status
 	db   *sql.DB
+}
+
+// ExecSQL 通过 database/sql Exec 执行 DDL，避免 Query 路径读取 DDL 成功响应时的
+// EOF 问题（clickhouse-go 在 ClickHouse 24.3 实测）；databend 驱动同样按 Exec 处理。
+func (c *Databend) ExecSQL(sql string) error {
+	_, err := c.db.Exec(sql)
+	return err
 }
 
 func (c *Databend) ClusterInfo() (clusters map[string]dto.ClusterInfo, err error) {

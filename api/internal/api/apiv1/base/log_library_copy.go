@@ -214,21 +214,28 @@ func copyLogLibrary(uid int, sourceTable *db.BaseTable, sourceDatabase, targetDa
 	if exists {
 		return copyOutcomeExists, nil
 	}
+	// DDL must run through database/sql Exec: the Query path behind DoSQL
+	// fails to read a successful DDL response on ClickHouse 24.3 and reports
+	// EOF although the statement was already applied (see factory.DDLExecutor).
+	executor, ok := targetOp.(factory.DDLExecutor)
+	if !ok {
+		return copyOutcomeDone, errors.New("target datasource does not support ddl execution")
+	}
 	ddlByRole := make(map[string]string, len(refs))
 	created := make([]logLibraryPhysicalTableRef, 0, len(refs))
 	for _, ref := range refs {
 		ddl, ddlErr := sourceOp.GetCreateSQL(ref.Database, ref.Table)
 		if ddlErr != nil {
-			rollbackCopiedLogLibrary(targetOp, targetDatabase, 0, created)
+			rollbackCopiedLogLibrary(executor, targetDatabase, 0, created)
 			return copyOutcomeDone, errors.Wrapf(ddlErr, "read ddl of %s", ref.Name)
 		}
 		ddl = rewriteLogLibraryCopyDDL(ddl, sourceDatabase, targetDatabase, sourceTable.Name)
-		if _, execErr := targetOp.DoSQL(ddl); execErr != nil {
+		if execErr := executor.ExecSQL(ddl); execErr != nil {
 			// The statement may have been applied even though reading the
 			// response failed (e.g. a broken connection), so include the ref
 			// in the rollback; the drop is idempotent when it was not.
 			created = append(created, ref)
-			rollbackCopiedLogLibrary(targetOp, targetDatabase, 0, created)
+			rollbackCopiedLogLibrary(executor, targetDatabase, 0, created)
 			return copyOutcomeDone, errors.Wrapf(execErr, "create %s", ref.Name)
 		}
 		created = append(created, ref)
@@ -306,7 +313,7 @@ func copyLogLibrary(uid int, sourceTable *db.BaseTable, sourceDatabase, targetDa
 	// of inheriting the legacy one (same fix as the manual rebuild action).
 	needsFix, fixErr := logLibraryStructureNeedsFix(sourceOp, sourceTable, sourceDatabase.Name)
 	if fixErr != nil {
-		rollbackCopiedLogLibrary(targetOp, targetDatabase, targetTable.ID, refs)
+		rollbackCopiedLogLibrary(executor, targetDatabase, targetTable.ID, refs)
 		return copyOutcomeDone, errors.Wrap(fixErr, "check collection structure")
 	}
 	if !needsFix {
@@ -314,11 +321,11 @@ func copyLogLibrary(uid int, sourceTable *db.BaseTable, sourceDatabase, targetDa
 	}
 	rebuilder, ok := targetOp.(factory.StorageRebuilder)
 	if !ok {
-		rollbackCopiedLogLibrary(targetOp, targetDatabase, targetTable.ID, refs)
+		rollbackCopiedLogLibrary(executor, targetDatabase, targetTable.ID, refs)
 		return copyOutcomeDone, errors.New("target datasource does not support storage rebuild")
 	}
 	if _, err = rebuilder.RebuildStorageInt64(targetTable.ID); err != nil {
-		rollbackCopiedLogLibrary(targetOp, targetDatabase, targetTable.ID, refs)
+		rollbackCopiedLogLibrary(executor, targetDatabase, targetTable.ID, refs)
 		return copyOutcomeDone, errors.Wrap(err, "rebuild collection structure")
 	}
 	return copyOutcomeFixed, nil
@@ -387,13 +394,13 @@ func logLibraryMetadataNeedsInt64Fix(sourceTable *db.BaseTable) bool {
 // later retry starts from a clean state: the physical tables created by the
 // replay are dropped and the metadata rows (when the log library was already
 // inserted, i.e. targetTableID > 0) are hard-deleted.
-func rollbackCopiedLogLibrary(targetOp factory.Operator, targetDatabase db.BaseDatabase, targetTableID int, refs []logLibraryPhysicalTableRef) {
+func rollbackCopiedLogLibrary(executor factory.DDLExecutor, targetDatabase db.BaseDatabase, targetTableID int, refs []logLibraryPhysicalTableRef) {
 	for i := len(refs) - 1; i >= 0; i-- {
-		dropSQL := fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", refs[i].Database, refs[i].Table)
-		if targetDatabase.Cluster != "" {
-			dropSQL += fmt.Sprintf(" ON CLUSTER '%s'", targetDatabase.Cluster)
-		}
-		if _, err := targetOp.DoSQL(dropSQL); err != nil {
+		// The tables were created under the TARGET database (the copy keeps
+		// the source table names), so the drop must target the target
+		// database too — refs[i].Database still points at the source one.
+		dropSQL := rollbackDropSQL(targetDatabase, refs[i])
+		if err := executor.ExecSQL(dropSQL); err != nil {
 			elog.Error("rollbackCopiedLogLibrary", elog.String("sql", dropSQL), elog.FieldErr(err))
 		}
 	}
@@ -414,6 +421,17 @@ func rollbackCopiedLogLibrary(targetOp factory.Operator, targetDatabase db.BaseD
 	if err := tx.Commit().Error; err != nil {
 		elog.Error("rollbackCopiedLogLibrary", elog.Int("tid", targetTableID), elog.FieldErr(err))
 	}
+}
+
+// rollbackDropSQL builds the idempotent drop statement for one physical table
+// of a copied log library. The table lives in the target database under its
+// source name; on a clustered target the drop fans out with ON CLUSTER.
+func rollbackDropSQL(targetDatabase db.BaseDatabase, ref logLibraryPhysicalTableRef) string {
+	dropSQL := fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", targetDatabase.Name, ref.Table)
+	if targetDatabase.Cluster != "" {
+		dropSQL += fmt.Sprintf(" ON CLUSTER '%s'", targetDatabase.Cluster)
+	}
+	return dropSQL
 }
 
 // rewriteLogLibraryCopyDDL re-points a CREATE TABLE / CREATE MATERIALIZED VIEW
