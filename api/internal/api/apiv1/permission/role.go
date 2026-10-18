@@ -206,8 +206,7 @@ func GetRoleUids(c *core.Context) {
 		c.JSONE(1, "无效的角色Id. ", nil)
 		return
 	}
-	rootUids := []int{}
-	//rootUids := permission.Manager.GetRootUsersId()
+	rootUids := permission.Manager.GetRoleUsersId(roleId)
 	resp := view.RootUsers{RootUids: rootUids}
 	c.JSONOK(resp)
 

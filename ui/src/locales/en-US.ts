@@ -906,6 +906,7 @@ export default {
   "systemSetting.role.table.subResources": "Subresource",
   "systemSetting.role.table.acts": "Acts",
   "systemSetting.role.table.relatedUsers": "Related Users",
+  "systemSetting.role.table.noRelatedUsers": "No users",
   "systemSetting.role.table.instanceGrantTip":
     "Instance-level resource authorization is configured in Instance Management",
   "systemSetting.role.filtrate.label.belongResource":

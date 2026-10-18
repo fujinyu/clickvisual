@@ -3,6 +3,7 @@ package permission
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/ego-component/egorm"
 	"github.com/gotomicro/ego/core/elog"
@@ -59,7 +60,10 @@ func (p *pms) AddUsers2AppRoles(rolesWithUsers *[]view.AppRoleInfoItem) {
 
 func (p *pms) GrantRoles2User(userId []int, roleId int) (err error) {
 	roleInfo, err := db2.PmsRoleInfo(roleId)
-	var appDefaultRoles = make([]view.RoleItem, 0)
+	if err != nil {
+		elog.Error("GrantRoles2User: get pmsRole failed", zap.Int("roleId", roleId), zap.Error(err))
+		return err
+	}
 
 	details := make([]view.RolePmsDetail, 0)
 	for _, detail := range roleInfo.Details {
@@ -69,6 +73,7 @@ func (p *pms) GrantRoles2User(userId []int, roleId int) (err error) {
 		})
 	}
 
+	appDefaultRoles := make([]view.RoleItem, 0)
 	appDefaultRoles = append(appDefaultRoles, view.RoleItem{
 		BelongType: pmsplugin.PrefixInstance,
 		ReferId:    0,
@@ -79,7 +84,18 @@ func (p *pms) GrantRoles2User(userId []int, roleId int) (err error) {
 		DomainType: "",
 		DomainId:   0,
 	})
-	return p.AssignRoles2UserV1(fmt.Sprintf("%s", userId), appDefaultRoles)
+	// assign one by one, so every user gets a valid casbin subject(user__<uid>).
+	// note: do NOT fmt.Sprintf("%s", userId) here, it stringifies the whole
+	// slice(e.g. "[3]") and breaks both casbin matching and reading the grant back.
+	for _, uid := range userId {
+		if uid <= 0 {
+			continue
+		}
+		if err := p.AssignRoles2UserV1(strconv.Itoa(uid), appDefaultRoles); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (p *pms) AssignRoles2UserV1(userId string, reqRoles []view.RoleItem) (err error) {
@@ -692,6 +708,60 @@ func (*pms) GetRootUsersId() []int {
 
 	}
 	return rootUids
+}
+
+// parseUidFromSubjectStr extracts the uid from a casbin subject like "user__3".
+// grants stored before GrantRoles2User was fixed may look like "user__[3]",
+// so surrounding brackets are tolerated here to keep old grants readable.
+func parseUidFromSubjectStr(subjectStr string) int {
+	if !strings.Contains(subjectStr, pmsplugin.PrefixUser+pmsplugin.SEP) {
+		return 0
+	}
+	parts := strings.Split(subjectStr, pmsplugin.SEP)
+	if len(parts) != 2 {
+		return 0
+	}
+	uid, err := strconv.Atoi(strings.Trim(parts[1], "[] "))
+	if err != nil {
+		return 0
+	}
+	return uid
+}
+
+// GetRoleUsersId returns the uids of users who have been assigned the target role.
+// Note, in the V1 assign flow(GrantRoles2User -> AssignRoles2UserV1), the role-user
+// relations are stored as casbin g/g3 rules(subject: user__<uid>, role: role__<name>__instance__0),
+// so read them back by the roleStr assembled from the target role.
+func (p *pms) GetRoleUsersId(roleId int) (uids []int) {
+	uids = make([]int, 0)
+	roleInfo, err := db2.PmsRoleInfo(roleId)
+	if err != nil {
+		elog.Warn("GetRoleUsersId: get pmsRole failed", zap.Int("roleId", roleId), zap.Error(err))
+		return uids
+	}
+	// keep the same assembling way as GrantRoles2User does
+	roleStr, err := pmsplugin.GetValidRoleStrByRoleItemV1(view.RoleItem{
+		BelongType: pmsplugin.PrefixInstance,
+		ReferId:    0,
+		RoleName:   roleInfo.Name,
+	})
+	if err != nil {
+		elog.Warn("GetRoleUsersId: assemble roleStr failed", zap.Int("roleId", roleId), zap.Error(err))
+		return uids
+	}
+	eRules := pmsplugin.GetRulesByRoleStrDirectly(roleStr, "")
+	if eRules == nil {
+		return uids
+	}
+	for _, eR := range *eRules {
+		for _, rule := range eR.Rules {
+			uid := parseUidFromSubjectStr(rule[0])
+			if uid > 0 {
+				uids = append(uids, uid)
+			}
+		}
+	}
+	return uids
 }
 
 func (p *pms) GrantRootUsers(newRootUids []int) {
