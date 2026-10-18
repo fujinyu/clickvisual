@@ -86,6 +86,7 @@ const RawLogsOperations = ({ oldPane }: { oldPane: PaneType | undefined }) => {
             <div className={rawLogsOperationsStyles.downloadMenu}>
               <Button
                 block
+                size="small"
                 type="text"
                 disabled={downloading}
                 onClick={() => handleDownload("json")}
@@ -94,6 +95,7 @@ const RawLogsOperations = ({ oldPane }: { oldPane: PaneType | undefined }) => {
               </Button>
               <Button
                 block
+                size="small"
                 type="text"
                 disabled={downloading}
                 onClick={() => handleDownload("raw")}
