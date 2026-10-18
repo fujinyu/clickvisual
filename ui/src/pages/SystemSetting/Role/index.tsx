@@ -2,7 +2,6 @@ import useRequest from "@/hooks/useRequest/useRequest";
 import ItemForm from "@/pages/SystemSetting/Role/components/ItemForm";
 import RoleModel from "@/pages/SystemSetting/Role/components/RoleModel";
 import RootUserForm from "@/pages/SystemSetting/Role/components/RootUserForm";
-import RoleUserForm from "@/pages/SystemSetting/Role/components/RoleUserForm";
 import SearchTable, {
   SearchTableInstance,
 } from "@/pages/SystemSetting/Role/components/SearchTable";
@@ -13,9 +12,7 @@ import {
   // reqCreatePmsDefaultRole,
   reqDeleteRole,
   reqGetRoleList,
-  reqRoleUids,
 } from "@/services/pms";
-import sysUserApi from "@/services/systemUser";
 import {
   ClearOutlined,
   DeleteOutlined,
@@ -24,7 +21,6 @@ import {
   PlusOutlined,
   QuestionCircleOutlined,
   SearchOutlined,
-  UsergroupAddOutlined,
 } from "@ant-design/icons";
 import { useModel } from "@umijs/max";
 import {
@@ -35,7 +31,6 @@ import {
   message,
   Modal,
   Select,
-  Space,
   Tag,
   Tooltip,
 } from "antd";
@@ -52,17 +47,8 @@ function PmsDefaultRoles() {
     useState<boolean>(false);
   const [grantRootUserVisible, handleGrantRootUserVisible] =
     useState<boolean>(false);
-  const [grantRoleUserVisible, handleGrantRoleUserVisible] =
-      useState<boolean>(false);
-  const [grantRoleId, handleGrantRoleId] =
-      useState<number>(0);
-  // 每个角色已关联的用户 uid 列表（key 为角色 id），以及 uid -> 用户显示名
-  const [roleUsersMap, setRoleUsersMap] = useState<
-    Record<number, number[]>
-  >({});
-  const [userNameMap, setUserNameMap] = useState<Record<number, string>>({});
   const [form] = Form.useForm();
-  const { handleCreate, handleGrantUsers,handleRoleGrantUsers } = useRole();
+  const { handleCreate, handleGrantUsers } = useRole();
   const deleteRole = useRequest(reqDeleteRole, {
     loadingText: {
       loading: undefined,
@@ -82,39 +68,6 @@ function PmsDefaultRoles() {
       if (res?.code === 0)
         onChangeRoleModal(true, 1, "global", callBackRefresh);
     });
-  };
-
-  // 拉取角色列表中各角色已关联的用户，用于「关联用户」列展示；失败时静默，不影响主列表
-  const loadRoleUsers = async (list: any[]) => {
-    if (!list || list.length === 0) return;
-    try {
-      const userRes = await sysUserApi.getUserList({
-        current: 1,
-        pageSize: 100,
-      });
-      if (userRes.code === 0) {
-        const nextUserNameMap: Record<number, string> = {};
-        (userRes.data?.list || []).forEach((user: any) => {
-          nextUserNameMap[user.uid] = user.nickname || user.username;
-        });
-        setUserNameMap(nextUserNameMap);
-      }
-      const entries = await Promise.all(
-        list.map(async (role) => {
-          const r = await reqRoleUids(role.id);
-          return [
-            role.id,
-            r.code === 0 ? r.data?.root_uids || [] : [],
-          ] as const;
-        })
-      );
-      setRoleUsersMap((prev) => ({
-        ...prev,
-        ...Object.fromEntries(entries),
-      }));
-    } catch {
-      // 关联用户加载失败仅影响辅助列，不阻塞主流程
-    }
   };
 
   const doDeleteRole = (roleId: number) => {
@@ -233,55 +186,11 @@ function PmsDefaultRoles() {
     },
     {
       title: i18n.formatMessage({
-        id: "systemSetting.role.table.relatedUsers",
-      }),
-      key: "relatedUsers",
-      width: 160,
-      render: (_: any, record: any) => {
-        const uids = roleUsersMap[record.id];
-        if (uids === undefined) {
-          return <span style={{ color: "rgba(0, 0, 0, 0.45)" }}>-</span>;
-        }
-        if (uids.length === 0) {
-          return (
-            <span style={{ color: "rgba(0, 0, 0, 0.45)" }}>
-              {i18n.formatMessage({
-                id: "systemSetting.role.table.noRelatedUsers",
-              })}
-            </span>
-          );
-        }
-        return (
-          <a
-            onClick={() => {
-              CheckRoot().then((r) => {
-                if (r.code !== 0) {
-                  message.error(r.msg);
-                  return;
-                }
-                handleGrantRoleId(record.id);
-                handleGrantRoleUserVisible(true);
-              });
-            }}
-          >
-            <Space size={4} wrap>
-              {uids.map((uid: number) => (
-                <Tag key={uid} color="#108ee9">
-                  {userNameMap[uid] || `UID:${uid}`}
-                </Tag>
-              ))}
-            </Space>
-          </a>
-        );
-      },
-    },
-    {
-      title: i18n.formatMessage({
         id: "operation",
       }),
       key: "operating",
       valueType: "option",
-      width: 100,
+      width: 80,
       fixed: "right" as "right",
       render: (_: any, record: any) => {
         return (
@@ -308,25 +217,6 @@ function PmsDefaultRoles() {
                       return;
                     }
                     editorRole(record.id);
-                  });
-                }}
-              />
-            </Tooltip>
-            <Divider type="vertical" />
-            <Tooltip
-              title={i18n.formatMessage({
-                id: "systemSetting.role.table.relatedUsers",
-              })}
-            >
-              <UsergroupAddOutlined
-                onClick={() => {
-                  CheckRoot().then((r) => {
-                    if (r.code !== 0) {
-                      message.error(r.msg);
-                      return;
-                    }
-                    handleGrantRoleId(record.id);
-                    handleGrantRoleUserVisible(true);
                   });
                 }}
               />
@@ -367,7 +257,6 @@ function PmsDefaultRoles() {
               message.error(`${r.msg}`);
               return [];
             }
-            loadRoleUsers(r.data || []);
             return r;
           });
         }}
@@ -506,24 +395,6 @@ function PmsDefaultRoles() {
         }}
         onCancel={() => handleGrantRootUserVisible(false)}
         modalVisible={grantRootUserVisible}
-      />
-      <RoleUserForm
-          formTitle={i18n.formatMessage({
-            id: "systemSetting.role.filtrate.roleAuthorization",
-          })}
-          onSubmit={async (value: any) => {
-            var roleId=grantRoleId;
-            const success = handleRoleGrantUsers(roleId,value);
-            if (await success) {
-              handleGrantRoleUserVisible(false);
-              if (actionRef.current) {
-                actionRef.current.refresh();
-              }
-            }
-          }}
-          onCancel={() => handleGrantRoleUserVisible(false)}
-          roleId={grantRoleId}
-          modalVisible={grantRoleUserVisible}
       />
       <RoleModel />
     </div>

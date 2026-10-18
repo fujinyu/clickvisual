@@ -118,18 +118,18 @@ func TableInfo(c *core.Context) {
 		c.JSONE(core.CodeErr, "this table does not exist, please verify"+err.Error(), nil)
 		return
 	}
-	//if err = permission.Manager.CheckNormalPermission(view.ReqPermission{
-	//	UserId:      c.Uid(),
-	//	ObjectType:  pmsplugin.PrefixInstance,
-	//	ObjectIdx:   strconv.Itoa(tableInfo.Database.Iid),
-	//	SubResource: pmsplugin.Log,
-	//	Acts:        []string{pmsplugin.ActView},
-	//	DomainType:  pmsplugin.PrefixTable,
-	//	DomainId:    strconv.Itoa(tableInfo.ID),
-	//}); err != nil {
-	//	c.JSONE(1, "permission verification failed", err)
-	//	return
-	//}
+	if err = permission.Manager.CheckNormalPermission(view.ReqPermission{
+		UserId:      c.Uid(),
+		ObjectType:  pmsplugin.PrefixInstance,
+		ObjectIdx:   strconv.Itoa(tableInfo.Database.Iid),
+		SubResource: pmsplugin.Log,
+		Acts:        []string{pmsplugin.ActView},
+		DomainType:  pmsplugin.PrefixTable,
+		DomainId:    strconv.Itoa(tableInfo.ID),
+	}); err != nil {
+		c.JSONE(1, "permission verification failed", err)
+		return
+	}
 	instance, err := db.InstanceInfo(invoker.Db, tableInfo.Database.Iid)
 	if err != nil {
 		c.JSONE(core.CodeErr, "read list failed: "+err.Error(), nil)
@@ -236,9 +236,9 @@ func TableList(c *core.Context) {
 	}
 	res := make([]view.RespTableSimple, 0)
 	for _, row := range tableList {
-		//if !service.TableViewIsPermission(c.Uid(), row.Database.Iid, row.ID) {
-		//	continue
-		//}
+		if !service.TableViewIsPermission(c.Uid(), row.Database.Iid, row.ID) {
+			continue
+		}
 		res = append(res, view.RespTableSimple{
 			Id:         row.ID,
 			TableName:  row.Name,
@@ -392,18 +392,18 @@ func TableLogs(c *core.Context) {
 		c.JSONE(core.CodeErr, "db and table are required fields", nil)
 		return
 	}
-	//if err = permission.Manager.CheckNormalPermission(view.ReqPermission{
-	//	UserId:      c.Uid(),
-	//	ObjectType:  pmsplugin.PrefixInstance,
-	//	ObjectIdx:   strconv.Itoa(tableInfo.Database.Iid),
-	//	SubResource: pmsplugin.Log,
-	//	Acts:        []string{pmsplugin.ActView},
-	//	DomainType:  pmsplugin.PrefixTable,
-	//	DomainId:    strconv.Itoa(tableInfo.ID),
-	//}); err != nil {
-	//	c.JSONE(1, "permission verification failed", err)
-	//	return
-	//}
+	if err = permission.Manager.CheckNormalPermission(view.ReqPermission{
+		UserId:      c.Uid(),
+		ObjectType:  pmsplugin.PrefixInstance,
+		ObjectIdx:   strconv.Itoa(tableInfo.Database.Iid),
+		SubResource: pmsplugin.Log,
+		Acts:        []string{pmsplugin.ActView},
+		DomainType:  pmsplugin.PrefixTable,
+		DomainId:    strconv.Itoa(tableInfo.ID),
+	}); err != nil {
+		c.JSONE(1, "permission verification failed", err)
+		return
+	}
 	op, err := service.InstanceManager.Load(tableInfo.Database.Iid)
 	if err != nil {
 		c.JSONE(core.CodeErr, "clickhouse i/o timeout", err)
@@ -462,16 +462,16 @@ func QueryComplete(c *core.Context) {
 		c.JSONE(core.CodeErr, "invalid parameter", nil)
 		return
 	}
-	//if err = permission.Manager.CheckNormalPermission(view.ReqPermission{
-	//	UserId:      c.Uid(),·
-	//	ObjectType:  pmsplugin.PrefixInstance,
-	//	ObjectIdx:   strconv.Itoa(iid),
-	//	SubResource: pmsplugin.Log,
-	//	Acts:        []string{pmsplugin.ActView},
-	//}); err != nil {
-	//	c.JSONE(1, "", err)
-	//	return
-	//}
+	if err = permission.Manager.CheckNormalPermission(view.ReqPermission{
+		UserId:      c.Uid(),
+		ObjectType:  pmsplugin.PrefixInstance,
+		ObjectIdx:   strconv.Itoa(iid),
+		SubResource: pmsplugin.Log,
+		Acts:        []string{pmsplugin.ActView},
+	}); err != nil {
+		c.JSONE(1, "", err)
+		return
+	}
 	op, err := service.InstanceManager.Load(iid)
 	if err != nil {
 		c.JSONE(core.CodeErr, "", err)
@@ -515,18 +515,18 @@ func TableCharts(c *core.Context) {
 		c.JSONE(core.CodeErr, "db and table are required fields", nil)
 		return
 	}
-	//if err = permission.Manager.CheckNormalPermission(view.ReqPermission{
-	//	UserId:      c.Uid(),
-	//	ObjectType:  pmsplugin.PrefixInstance,
-	//	ObjectIdx:   strconv.Itoa(tableInfo.Database.Iid),
-	//	SubResource: pmsplugin.Log,
-	//	Acts:        []string{pmsplugin.ActView},
-	//	DomainType:  pmsplugin.PrefixTable,
-	//	DomainId:    strconv.Itoa(tableInfo.ID),
-	//}); err != nil {
-	//	c.JSONE(1, "checkNormalPermission", err)
-	//	return
-	//}
+	if err = permission.Manager.CheckNormalPermission(view.ReqPermission{
+		UserId:      c.Uid(),
+		ObjectType:  pmsplugin.PrefixInstance,
+		ObjectIdx:   strconv.Itoa(tableInfo.Database.Iid),
+		SubResource: pmsplugin.Log,
+		Acts:        []string{pmsplugin.ActView},
+		DomainType:  pmsplugin.PrefixTable,
+		DomainId:    strconv.Itoa(tableInfo.ID),
+	}); err != nil {
+		c.JSONE(1, "checkNormalPermission", err)
+		return
+	}
 	op, err := service.InstanceManager.Load(tableInfo.Database.Iid)
 	if err != nil {
 		c.JSONE(core.CodeErr, "instanceManagerLoad", err)
