@@ -890,6 +890,8 @@ export default {
   "systemSetting.role.rootUserForm.admin": "管理员",
   "systemSetting.role.rootUserForm.superAdministrator.rules":
     "请至少选择一个用户!",
+  "systemSetting.role.rootUserForm.scopeTip":
+    "保存后，勾选的用户将在该角色生效的所有实例上获得该角色（含之后新建的实例，重新保存即可覆盖）。如需按数据库/日志库精细授权，请到「实例管理」对应实例的「角色授权」中操作。",
 
   // sys -> role-> hooks -> role
   "hooks.role.create.ing": "正在添加",

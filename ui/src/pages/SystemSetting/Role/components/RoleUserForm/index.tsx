@@ -1,5 +1,5 @@
 import {reqRoleUids} from "@/services/pms";
-import { Form, message, Modal } from "antd";
+import { Alert, Form, message, Modal } from "antd";
 import React, { useEffect } from "react";
 import { useIntl } from "umi";
 import UserSelect from "../UserSelect";
@@ -57,6 +57,14 @@ const RoleUsersForm: React.FC<ListFormProps> = (props) => {
       {...modalFooter}
       width={800}
     >
+      <Alert
+        style={{ marginBottom: 16 }}
+        type="info"
+        showIcon
+        message={i18n.formatMessage({
+          id: "systemSetting.role.rootUserForm.scopeTip",
+        })}
+      />
       <Form {...formLayout} form={form} onFinish={onSubmit} scrollToFirstError>
         <Form.Item
           style={{ marginRight: 10 }}

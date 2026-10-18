@@ -248,6 +248,9 @@ func GrantRoleUids(c *core.Context) {
 		c.JSONE(1, err.Error(), nil)
 		return
 	}
-	permission.Manager.GrantRoles2User(reqModel.RootUids, roleId)
+	if err = permission.Manager.GrantRoles2User(reqModel.RootUids, roleId); err != nil {
+		c.JSONE(1, "GrantRoleUids: "+err.Error(), err)
+		return
+	}
 	c.JSONOK()
 }

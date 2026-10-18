@@ -2,6 +2,7 @@ package permission
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
+	"github.com/clickvisual/clickvisual/api/internal/invoker"
 	db2 "github.com/clickvisual/clickvisual/api/internal/pkg/model/db"
 	"github.com/clickvisual/clickvisual/api/internal/pkg/model/view"
 	"github.com/clickvisual/clickvisual/api/internal/service/permission/pmsplugin"
@@ -58,107 +60,256 @@ func (p *pms) AddUsers2AppRoles(rolesWithUsers *[]view.AppRoleInfoItem) {
 	}
 }
 
+// GrantRoles2User overwrites the user roster of the target pmsRole: after a successful
+// return, the submitted userIds are exactly the users holding the role.
+//
+// How a grant is stored(the pms_role / pms_role_ref / pms_role_ref_grant model):
+//   - a pmsRole takes effect on an instance only through its Ref(pms_role_ref), because
+//     the Ref is what materializes the role's p rules for that instance;
+//   - granting the role to a user means, for every Ref of the role, one grant record
+//     (cv_pms_role_ref_grant) plus the matching casbin g3 rule
+//     "user__<uid> -> role__<roleId>__instance__<refId>".
+//
+// So this function covers ALL instances the role applies to(all current instances for a
+// default role, the belonged instance for a custom role), creating the missing Refs first
+// if needed. Domain-scoped(数据库/日志库) grants are per-instance concerns and are managed
+// on the instance panel(系统设置 -> 实例管理 -> 角色授权), not here.
 func (p *pms) GrantRoles2User(userId []int, roleId int) (err error) {
 	roleInfo, err := db2.PmsRoleInfo(roleId)
-	if err != nil {
-		elog.Error("GrantRoles2User: get pmsRole failed", zap.Int("roleId", roleId), zap.Error(err))
-		return err
+	if err != nil || roleInfo == nil || roleInfo.ID == 0 {
+		return fmt.Errorf("target pmsRole(id:%d) not found. ", roleId)
 	}
+	if roleInfo.BelongResource != pmsplugin.PrefixInstance {
+		return fmt.Errorf("only support %s resource currently. ", pmsplugin.PrefixInstance)
+	}
+	if len(roleInfo.Details) <= 0 {
+		return fmt.Errorf("target pmsRole(id:%d) has no detail, it cannot be granted. ", roleId)
+	}
+	pmsplugin.EnforcerLock()
+	defer pmsplugin.EnforcerUnlock()
 
-	details := make([]view.RolePmsDetail, 0)
-	for _, detail := range roleInfo.Details {
-		details = append(details, view.RolePmsDetail{
-			SubResources: detail.SubResources,
-			Acts:         detail.Acts,
-		})
+	// 1. make sure the role is activated(Ref + p rules) on every instance it applies to,
+	//    otherwise the grant would match no p rule and silently do nothing.
+	if err = p.ensurePmsRoleRefs(roleInfo); err != nil {
+		return fmt.Errorf("ensure refs of pmsRole(id:%d) failed. %w", roleId, err)
 	}
-
-	appDefaultRoles := make([]view.RoleItem, 0)
-	appDefaultRoles = append(appDefaultRoles, view.RoleItem{
-		BelongType: pmsplugin.PrefixInstance,
-		ReferId:    0,
-		ReferGroup: "",
-		RoleName:   roleInfo.Name,
-		RoleDesc:   roleInfo.Desc,
-		PmsDetails: details,
-		DomainType: "",
-		DomainId:   0,
-	})
-	// assign one by one, so every user gets a valid casbin subject(user__<uid>).
-	// note: do NOT fmt.Sprintf("%s", userId) here, it stringifies the whole
-	// slice(e.g. "[3]") and breaks both casbin matching and reading the grant back.
-	roleStr, err := pmsplugin.GetValidRoleStrByRoleItemV1(appDefaultRoles[0])
+	refs, err := db2.GetPmsRoleRefList(egorm.Conds{"pms_role_id": roleId})
 	if err != nil {
-		elog.Error("GrantRoles2User: assemble roleStr failed", zap.Int("roleId", roleId), zap.Error(err))
-		return err
+		return fmt.Errorf("get refs of pmsRole(id:%d) failed. %w", roleId, err)
 	}
-	// overwrite semantics(mirroring GrantRootUsers): users unchecked in the UI
-	// must have their g rules deleted, otherwise the removable tags of the
-	// grant modal lie(add-only would silently keep old grants).
-	_, _, uidsNeed2Rm := pmsplugin.CmpUserIds2GetNewAndRmUserIds(p.GetRoleUsersId(roleId), userId)
-	for _, rmUid := range uidsNeed2Rm {
-		userStr, _ := pmsplugin.Assemble2CasbinStr(pmsplugin.PrefixUser, strconv.Itoa(rmUid))
-		// also try the legacy malformed subject(user__[3]) written before this was fixed
-		legacyUserStr := fmt.Sprintf("%s%s[%d]", pmsplugin.PrefixUser, pmsplugin.SEP, rmUid)
-		for _, subject := range []string{userStr, legacyUserStr} {
-			// two storage formats may exist for the same grant:
-			//   g3 with no domain: the current format(see AssignRoles2UserV1);
-			//   g with an empty domain: the legacy format, which is skipped by
-			//   casbin's LoadPolicyArray and therefore only lives in the db
-			//   after a restart, so it must be deleted from the db directly.
-			if _, rmErr := pmsplugin.DelRule(pmsplugin.RuleTypeG3, subject, roleStr); rmErr != nil {
-				elog.Warn("GrantRoles2User: remove outdated g3 rule failed", zap.String("subject", subject), zap.Error(rmErr))
-			}
-			if rmErr := pmsplugin.DelRuleFromDbDirectly(pmsplugin.RuleTypeG3, subject, roleStr); rmErr != nil {
-				elog.Warn("GrantRoles2User: remove outdated g3 rule from db failed", zap.String("subject", subject), zap.Error(rmErr))
-			}
-			if _, rmErr := pmsplugin.DelRule(pmsplugin.RuleTypeG, subject, roleStr, ""); rmErr != nil {
-				elog.Warn("GrantRoles2User: remove legacy g rule failed", zap.String("subject", subject), zap.Error(rmErr))
-			}
-			if rmErr := pmsplugin.DelRuleFromDbDirectly(pmsplugin.RuleTypeG, subject, roleStr, ""); rmErr != nil {
-				elog.Warn("GrantRoles2User: remove legacy g rule from db failed", zap.String("subject", subject), zap.Error(rmErr))
-			}
-		}
+	if len(refs) == 0 {
+		return fmt.Errorf("target pmsRole(id:%d) has not been activated on any instance. ", roleId)
 	}
-	for _, uid := range userId {
-		if uid <= 0 {
+	refPkIds := make([]int, 0, len(refs))
+	for _, ref := range refs {
+		refPkIds = append(refPkIds, ref.ID)
+	}
+	// 2. diff the roster. The current roster is the union of the grant records(the
+	//    authoritative source) and the legacy casbin rules(written by the old broken V1
+	//    flow, which match no p rule but must still show up and get converted).
+	currentRealUids, err := db2.GetPmsRoleGrantUids(roleId, pmsplugin.PrefixUser)
+	if err != nil {
+		return fmt.Errorf("get granted uids of pmsRole(id:%d) failed. %w", roleId, err)
+	}
+	legacyRoleStr := legacyInstanceRoleStr(roleInfo.Name)
+	legacyUids := p.getLegacyRoleUserIds(legacyRoleStr)
+	_, needAddUids, _ := pmsplugin.CmpUserIds2GetNewAndRmUserIds(dedupeInts(currentRealUids), userId)
+	_, _, needRmUids := pmsplugin.CmpUserIds2GetNewAndRmUserIds(
+		dedupeInts(append(append(make([]int, 0, len(currentRealUids)+len(legacyUids)), currentRealUids...), legacyUids...)), userId)
+
+	tx := invoker.Db.Begin()
+	// 3. overwrite semantics: remove the grants(record + casbin rule) of the users which
+	//    are not in the submitted roster anymore.
+	for _, rmUid := range needRmUids {
+		if rmUid <= 0 {
 			continue
 		}
-		if err := p.AssignRoles2UserV1(strconv.Itoa(uid), appDefaultRoles); err != nil {
-			return err
+		userStr, _ := pmsplugin.Assemble2CasbinStr(pmsplugin.PrefixUser, strconv.Itoa(rmUid))
+		userGrants, gErr := db2.GetPmsRoleRefGrantsByObj(refPkIds, pmsplugin.PrefixUser, rmUid)
+		if gErr != nil {
+			elog.Warn("GrantRoles2User: get grants of the user to be removed failed",
+				zap.Int("uid", rmUid), zap.Error(gErr))
+		}
+		delEhRules := make([]pmsplugin.EnhancedCasbinRulesItem, 0)
+		for _, ref := range refs {
+			roleStr, _ := pmsplugin.Assemble2CasbinStr(pmsplugin.PrefixRole, strconv.Itoa(roleId),
+				pmsplugin.PrefixInstance, strconv.Itoa(ref.RefId))
+			// the format written by this function(and by the instance panel without domain)
+			delEhRules = append(delEhRules, pmsplugin.EnhancedCasbinRulesItem{
+				Ptype: pmsplugin.RuleTypeG3,
+				Rules: [][]string{{userStr, roleStr}},
+			})
+			// domain-scoped grants made on the instance panel
+			for _, grant := range userGrants {
+				if grant.PmsRoleRefId != ref.ID || grant.DomainType == "" {
+					continue
+				}
+				domStr, _ := pmsplugin.Assemble2CasbinStr(grant.DomainType, strconv.Itoa(grant.DomainId))
+				delEhRules = append(delEhRules, pmsplugin.EnhancedCasbinRulesItem{
+					Ptype: pmsplugin.RuleTypeG,
+					Rules: [][]string{{userStr, roleStr, domStr}},
+				})
+			}
+		}
+		if err = pmsplugin.DelCasbinRulesFromDb(tx, delEhRules); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("remove casbin rules of user(%d) failed. %w", rmUid, err)
+		}
+		if err = tx.Table(db2.TableNamePmsRoleRefGrant).
+			Where("pms_role_ref_id IN ? AND object_type = ? AND object_id = ?",
+				refPkIds, pmsplugin.PrefixUser, rmUid).
+			Delete(&db2.PmsRoleRefGrant{}).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("delete grant records of user(%d) failed. %w", rmUid, err)
 		}
 	}
-	// resync the enforcer with the db(mirroring GrantRootUsers): the db-direct
-	// deletes above are invisible to the memory, and in single-copy deployments
-	// no watcher notification arrives for rules changed by another process.
+	// 4. convert/clean the legacy rules of the broken V1 flow(name-based "role__<name>
+	//    __instance__0" rules, which match no p rule and grant nothing): after this
+	//    operation none of them should remain, no matter the user is added, kept or removed.
+	if len(legacyUids) > 0 {
+		legacyDelEhRules := make([]pmsplugin.EnhancedCasbinRulesItem, 0)
+		for _, legacyUid := range legacyUids {
+			if legacyUid <= 0 {
+				continue
+			}
+			userStr, _ := pmsplugin.Assemble2CasbinStr(pmsplugin.PrefixUser, strconv.Itoa(legacyUid))
+			// also try the legacy malformed subject(user__[3]) written before this was fixed
+			legacyUserStr := fmt.Sprintf("%s%s[%d]", pmsplugin.PrefixUser, pmsplugin.SEP, legacyUid)
+			for _, subject := range []string{userStr, legacyUserStr} {
+				legacyDelEhRules = append(legacyDelEhRules,
+					pmsplugin.EnhancedCasbinRulesItem{Ptype: pmsplugin.RuleTypeG3,
+						Rules: [][]string{{subject, legacyRoleStr}}},
+					pmsplugin.EnhancedCasbinRulesItem{Ptype: pmsplugin.RuleTypeG,
+						Rules: [][]string{{subject, legacyRoleStr, ""}}},
+				)
+			}
+		}
+		if err = pmsplugin.DelCasbinRulesFromDb(tx, legacyDelEhRules); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("remove legacy casbin rules of pmsRole(id:%d) failed. %w", roleId, err)
+		}
+	}
+	// 5. add the grants(record + casbin g3 rule) of the new users, on every ref of the role
+	for _, addUid := range needAddUids {
+		if addUid <= 0 {
+			continue
+		}
+		userStr, _ := pmsplugin.Assemble2CasbinStr(pmsplugin.PrefixUser, strconv.Itoa(addUid))
+		existGrants, gErr := db2.GetPmsRoleRefGrantsByObj(refPkIds, pmsplugin.PrefixUser, addUid)
+		if gErr != nil {
+			elog.Warn("GrantRoles2User: get exist grants of the user failed",
+				zap.Int("uid", addUid), zap.Error(gErr))
+		}
+		existRefIds := make(map[int]struct{}, len(existGrants))
+		for _, grant := range existGrants {
+			existRefIds[grant.PmsRoleRefId] = struct{}{}
+		}
+		addEhRules := make([]pmsplugin.EnhancedCasbinRulesItem, 0)
+		for _, ref := range refs {
+			roleStr, _ := pmsplugin.Assemble2CasbinStr(pmsplugin.PrefixRole, strconv.Itoa(roleId),
+				pmsplugin.PrefixInstance, strconv.Itoa(ref.RefId))
+			if _, exist := existRefIds[ref.ID]; !exist {
+				grant := db2.PmsRoleRefGrant{
+					PmsRoleRefId: ref.ID,
+					Ptype:        pmsplugin.RuleTypeG3,
+					ObjectType:   pmsplugin.PrefixUser,
+					ObjectId:     addUid,
+				}
+				if err = tx.Table(db2.TableNamePmsRoleRefGrant).Create(&grant).Error; err != nil {
+					tx.Rollback()
+					return fmt.Errorf("create grant record of user(%d) on instance(%d) failed. %w",
+						addUid, ref.RefId, err)
+				}
+			}
+			// g3(no domain): the role page grants the role's full scope on the instance
+			addEhRules = append(addEhRules, pmsplugin.EnhancedCasbinRulesItem{
+				Ptype: pmsplugin.RuleTypeG3,
+				Rules: [][]string{{userStr, roleStr}},
+			})
+		}
+		if err = pmsplugin.AddCasbinRules2Db(tx, addEhRules); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("add casbin rules of user(%d) failed. %w", addUid, err)
+		}
+	}
+	if err = tx.Commit().Error; err != nil {
+		return fmt.Errorf("commit grants of pmsRole(id:%d) failed. %w", roleId, err)
+	}
+	// 6. resync the enforcer with the db(the changes above only touched the db).
 	pmsplugin.EnforcerLoadPolicy()
 	return nil
 }
 
-func (p *pms) AssignRoles2UserV1(userId string, reqRoles []view.RoleItem) (err error) {
-	if userId == "" {
-		return errors.New("userId cannot be empty")
-	}
-	userStr, _ := pmsplugin.Assemble2CasbinStr(pmsplugin.PrefixUser, userId)
-	for _, roleItem := range reqRoles {
-		roleStr, err := pmsplugin.GetValidRoleStrByRoleItemV1(roleItem)
+// ensurePmsRoleRefs makes sure the role has been activated(a Ref, which materializes the
+// role's p rules) on every instance it applies to: all current instances for a default
+// role, the belonged instance for a custom role. Without a Ref the role has no p rule on
+// that instance, so granting it would silently match nothing. Existing Refs are kept and
+// missing ones are created here, which also picks up instances created after the last grant.
+func (p *pms) ensurePmsRoleRefs(roleInfo *db2.PmsRole) (err error) {
+	targetIids := make([]int, 0)
+	if roleInfo.RoleType == db2.PmsRoleTypeCustom {
+		if roleInfo.ResourceId <= 0 {
+			return fmt.Errorf("custom pmsRole(id:%d) has no belonged resourceId. ", roleInfo.ID)
+		}
+		targetIids = append(targetIids, roleInfo.ResourceId)
+	} else {
+		instances, err := db2.InstanceList(egorm.Conds{})
 		if err != nil {
-			elog.Warn("invalid roleString", zap.Error(err))
+			return fmt.Errorf("get instances failed. %w", err)
+		}
+		for _, ins := range instances {
+			targetIids = append(targetIids, ins.ID)
+		}
+	}
+	existedIids := make(map[int]struct{}, len(roleInfo.Refs))
+	for _, ref := range roleInfo.Refs {
+		existedIids[ref.RefId] = struct{}{}
+	}
+	newRefs := make([]*db2.PmsRoleRef, 0)
+	for _, iid := range targetIids {
+		if _, exist := existedIids[iid]; exist {
 			continue
 		}
-		// The V1 grant flow never carries a domain, so per the g/g3 convention
-		// (see the top of pmsplugin/common.go) the grant must be stored as a g3
-		// rule. Storing it as a g rule with an empty domain used to break two
-		// things: the rule is skipped by casbin's LoadPolicyArray(2 tokens < 3
-		// tokens of the g assertion) and thus vanishes from the enforcer after
-		// every restart, and re-granting the same user then fails with MySQL
-		// error 1062 on idx_cv_pms_casbin_rule. See AddRule for the details.
-		// If a domain-carrying grant is ever needed here, use AssignRoles2User.
-		if _, err := pmsplugin.AddRule(pmsplugin.RuleTypeG3, userStr, roleStr); err != nil {
-			elog.Warn("assign role to user error", zap.String("role", roleStr), zap.Error(err))
+		newRefs = append(newRefs, &db2.PmsRoleRef{PmsRoleId: roleInfo.ID, RefId: iid})
+	}
+	if len(newRefs) == 0 {
+		return nil
+	}
+	tx := invoker.Db.Begin()
+	if err = p.pmsRoleAddRef(tx, roleInfo, newRefs...); err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit().Error
+}
+
+// legacyInstanceRoleStr assembles the roleStr written by the old broken V1 grant flow:
+// "role__<name>__instance__0". It is name-based(not role-id based) and points at a
+// non-existent instance 0, so it matches no p rule and grants nothing. It is only used to
+// find and clean up those legacy rules.
+func legacyInstanceRoleStr(roleName string) string {
+	return strings.Join([]string{pmsplugin.PrefixRole, roleName, pmsplugin.PrefixInstance, "0"},
+		pmsplugin.SEP)
+}
+
+// getLegacyRoleUserIds reads the uids which only exist as casbin rules of the broken V1
+// flow(i.e. name-based "role__<name>__instance__0" rules). They are returned so that the
+// role page still displays those(historically)associated users, and the next save converts
+// them into real grant records.
+func (p *pms) getLegacyRoleUserIds(legacyRoleStr string) (uids []int) {
+	uids = make([]int, 0)
+	eRules := pmsplugin.GetRulesByRoleStrFromDb(legacyRoleStr, "")
+	if eRules == nil {
+		return uids
+	}
+	for _, eRule := range *eRules {
+		for _, rule := range eRule.Rules {
+			if uid := parseUidFromSubjectStr(rule[0]); uid > 0 {
+				uids = append(uids, uid)
+			}
 		}
 	}
-	return nil
+	return dedupeInts(uids)
 }
 
 // AssignRoles2User - assign roles to specific user
@@ -769,47 +920,37 @@ func parseUidFromSubjectStr(subjectStr string) int {
 	return uid
 }
 
-// GetRoleUsersId returns the uids of users who have been assigned the target role.
-// Note, in the V1 assign flow(GrantRoles2User -> AssignRoles2UserV1), the role-user
-// relations are stored as casbin g/g3 rules(subject: user__<uid>, role: role__<name>__instance__0),
-// so read them back by the roleStr assembled from the target role.
-// The rules are read from the cv_pms_casbin_rule table directly instead of the
-// enforcer memory: empty-domain g rules written by the old flow are skipped by
-// casbin's LoadPolicyArray and thus missing from the memory after every restart,
-// which made previously granted users invisible here(and caused error 1062 on
-// re-grant). The db is the source of truth. See GetRulesByRoleStrFromDb.
+// GetRoleUsersId returns the uids of users who hold the target role.
+//
+// The authoritative source is the grant records(cv_pms_role_ref_grant) read straight from
+// the db: the casbin enforcer memory is NOT reliable here, because rules with an empty
+// domain are skipped by casbin's LoadPolicyArray and thus missing from the memory after
+// every restart. Grants made on any instance(the role page) or with any domain(the
+// instance panel) both count as "holding the role".
+//
+// Users which only exist as legacy casbin rules(written by the old broken V1 flow as
+// name-based "role__<name>__instance__0" rules that match no p rule) are also returned,
+// so that they still show up in the role page and get converted into real grant records
+// on the next save.
 func (p *pms) GetRoleUsersId(roleId int) (uids []int) {
 	uids = make([]int, 0)
 	roleInfo, err := db2.PmsRoleInfo(roleId)
-	if err != nil {
+	if err != nil || roleInfo == nil || roleInfo.ID == 0 {
 		elog.Warn("GetRoleUsersId: get pmsRole failed", zap.Int("roleId", roleId), zap.Error(err))
 		return uids
 	}
-	// keep the same assembling way as GrantRoles2User does
-	roleStr, err := pmsplugin.GetValidRoleStrByRoleItemV1(view.RoleItem{
-		BelongType: pmsplugin.PrefixInstance,
-		ReferId:    0,
-		RoleName:   roleInfo.Name,
-	})
+	grantUids, err := db2.GetPmsRoleGrantUids(roleId, pmsplugin.PrefixUser)
 	if err != nil {
-		elog.Warn("GetRoleUsersId: assemble roleStr failed", zap.Int("roleId", roleId), zap.Error(err))
-		return uids
+		elog.Warn("GetRoleUsersId: get granted uids of pmsRole failed",
+			zap.Int("roleId", roleId), zap.Error(err))
 	}
-	eRules := pmsplugin.GetRulesByRoleStrFromDb(roleStr, "")
-	if eRules == nil {
-		return uids
-	}
-	for _, eR := range *eRules {
-		for _, rule := range eR.Rules {
-			uid := parseUidFromSubjectStr(rule[0])
-			if uid > 0 {
-				uids = append(uids, uid)
-			}
-		}
-	}
-	// dedupe: a user may hold both the correct rule(user__3) and the legacy
-	// malformed one(user__[3]) if the grant was re-saved before cleaning up.
-	return dedupeInts(uids)
+	uids = append(uids, grantUids...)
+	uids = append(uids, p.getLegacyRoleUserIds(legacyInstanceRoleStr(roleInfo.Name))...)
+	// dedupe: a user may hold both a grant record and a legacy rule if the grant was
+	// saved before the legacy rules were cleaned up.
+	uids = dedupeInts(uids)
+	sort.Ints(uids)
+	return uids
 }
 
 // dedupeInts removes duplicated items and keeps the first-seen order.

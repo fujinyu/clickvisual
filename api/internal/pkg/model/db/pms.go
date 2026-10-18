@@ -249,6 +249,39 @@ func GetPmsRoleRefInfo(conds egorm.Conds) (resp PmsRoleRef, err error) {
 	return
 }
 
+// GetPmsRoleGrantUids returns the object ids(e.g. uids) which have been granted the target
+// pmsRole through any of its refs(i.e. on any instance), no matter which domain(数据库/日志库)
+// the grant is scoped to. Note, the result may contain duplicates, the caller should dedupe.
+func GetPmsRoleGrantUids(roleId int, objectType string) (uids []int, err error) {
+	refIds := make([]int, 0)
+	if err = invoker.Db.Table(TableNamePmsRoleRef).Where("pms_role_id = ?", roleId).
+		Pluck("id", &refIds).Error; err != nil {
+		return nil, err
+	}
+	if len(refIds) == 0 {
+		return []int{}, nil
+	}
+	if err = invoker.Db.Table(TableNamePmsRoleRefGrant).
+		Where("pms_role_ref_id IN ? AND object_type = ?", refIds, objectType).
+		Pluck("object_id", &uids).Error; err != nil {
+		return nil, err
+	}
+	return uids, nil
+}
+
+// GetPmsRoleRefGrantsByObj returns the grant records which grant the target object(e.g. a
+// user) the roles of the given refs, so that the caller can delete the matching casbin
+// rules(whose domain depends on each grant record) before deleting the records.
+func GetPmsRoleRefGrantsByObj(refIds []int, objectType string, objectId int) (grants []PmsRoleRefGrant, err error) {
+	if len(refIds) == 0 {
+		return []PmsRoleRefGrant{}, nil
+	}
+	err = invoker.Db.Table(TableNamePmsRoleRefGrant).
+		Where("pms_role_ref_id IN ? AND object_type = ? AND object_id = ?", refIds, objectType, objectId).
+		Find(&grants).Error
+	return
+}
+
 func CreatePmsRole(db *gorm.DB, data *PmsRole) (err error) {
 	if len(data.Details) <= 0 {
 		return fmt.Errorf("pms_role must authorize detail(s)! ")

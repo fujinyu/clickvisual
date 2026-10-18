@@ -137,3 +137,75 @@ func TestIsEmptyDomParam(t *testing.T) {
 		})
 	}
 }
+
+// TestCmpUserIds2GetNewAndRmUserIds covers the diff which the role-page grant
+// (GrantRoles2User) relies on: needAdd = future \ current, needRm = current \ future.
+func TestCmpUserIds2GetNewAndRmUserIds(t *testing.T) {
+	cases := []struct {
+		name        string
+		current     []int
+		future      []int
+		wantEqual   bool
+		wantAdd     []int
+		wantRm      []int
+	}{
+		{
+			name: "both empty", current: []int{}, future: []int{},
+			wantEqual: true, wantAdd: []int{}, wantRm: []int{},
+		},
+		{
+			name: "same roster", current: []int{1, 2}, future: []int{1, 2},
+			wantEqual: true, wantAdd: []int{}, wantRm: []int{},
+		},
+		{
+			name: "add one user", current: []int{1}, future: []int{1, 3},
+			wantEqual: false, wantAdd: []int{3}, wantRm: []int{},
+		},
+		{
+			name: "remove one user", current: []int{1, 2}, future: []int{1},
+			wantEqual: false, wantAdd: []int{}, wantRm: []int{2},
+		},
+		{
+			name: "replace all users", current: []int{1, 2}, future: []int{3, 4},
+			wantEqual: false, wantAdd: []int{3, 4}, wantRm: []int{1, 2},
+		},
+		{
+			name: "clear the roster", current: []int{1, 2}, future: []int{},
+			wantEqual: false, wantAdd: []int{}, wantRm: []int{1, 2},
+		},
+		{
+			name: "grant on an empty roster", current: []int{}, future: []int{1, 2},
+			wantEqual: false, wantAdd: []int{1, 2}, wantRm: []int{},
+		},
+		{
+			name: "duplicated future uids", current: []int{1}, future: []int{1, 1},
+			wantEqual: true, wantAdd: []int{}, wantRm: []int{},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			isEqual, needAdd, needRm := CmpUserIds2GetNewAndRmUserIds(c.current, c.future)
+			if isEqual != c.wantEqual {
+				t.Errorf("isEqual = %v, want %v", isEqual, c.wantEqual)
+			}
+			if !reflect.DeepEqual(needAdd, c.wantAdd) {
+				t.Errorf("needAdd = %v, want %v", needAdd, c.wantAdd)
+			}
+			// needRm is collected from a map, so its order is not deterministic
+			if len(needRm) != len(c.wantRm) {
+				t.Errorf("needRm = %v, want %v", needRm, c.wantRm)
+				return
+			}
+			rmMap := make(map[int]struct{}, len(needRm))
+			for _, uid := range needRm {
+				rmMap[uid] = struct{}{}
+			}
+			for _, uid := range c.wantRm {
+				if _, ok := rmMap[uid]; !ok {
+					t.Errorf("needRm = %v, want %v", needRm, c.wantRm)
+					return
+				}
+			}
+		})
+	}
+}

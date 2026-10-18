@@ -46,3 +46,22 @@ func TestDedupeInts(t *testing.T) {
 		})
 	}
 }
+
+func TestLegacyInstanceRoleStr(t *testing.T) {
+	cases := []struct {
+		name     string
+		roleName string
+		expected string
+	}{
+		{name: "normal role name", roleName: "read", expected: "role__read__instance__0"},
+		{name: "role name with underscore", roleName: "log_read", expected: "role__log_read__instance__0"},
+		{name: "empty role name", roleName: "", expected: "role____instance__0"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := legacyInstanceRoleStr(c.roleName); got != c.expected {
+				t.Errorf("legacyInstanceRoleStr(%q) = %q, want %q", c.roleName, got, c.expected)
+			}
+		})
+	}
+}

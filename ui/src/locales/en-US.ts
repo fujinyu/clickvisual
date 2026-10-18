@@ -949,6 +949,8 @@ export default {
   "systemSetting.role.rootUserForm.admin": "administrator",
   "systemSetting.role.rootUserForm.superAdministrator.rules":
     "Please select at least one user!",
+  "systemSetting.role.rootUserForm.scopeTip":
+    "After saving, the selected users will hold this role on every instance the role applies to (including instances created later - just save again to extend). For database/table-scoped grants, use \"Role Grant\" of the target instance under Instance Management.",
 
   // sys -> user
   "sys.user.allCopy": "Copy all",
