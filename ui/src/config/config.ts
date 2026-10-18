@@ -6,6 +6,8 @@ export const FIRST_PAGE = 1;
 export const PAGE_SIZE = 10;
 // 日志查询分页默认条数
 export const LOG_PAGE_SIZE = 50;
+// 日志下载最大行数上限
+export const DOWNLOAD_LOG_ROW_LIMIT = 6000;
 
 // 时间组件：activeKey
 export enum TimeRangeType {

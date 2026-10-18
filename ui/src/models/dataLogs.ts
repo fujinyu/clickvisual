@@ -1,6 +1,7 @@
 import {
   ACTIVE_TIME_INDEX,
   CLICKVISUAL_LOGSPECIALCONNECTOR,
+  DOWNLOAD_LOG_ROW_LIMIT,
   FIFTEEN_TIME,
   FIRST_PAGE,
   MINUTES_UNIT_TIME,
@@ -52,9 +53,8 @@ const SharePath = [
   process.env.PUBLIC_PATH + "share/",
 ];
 
-// 下载抓取分页大小与最大行数上限
+// 下载抓取分页大小（行数上限见 config 中 DOWNLOAD_LOG_ROW_LIMIT，可配置）
 const DOWNLOAD_LOG_PAGE_SIZE = 200;
-const DOWNLOAD_LOG_ROW_LIMIT = 10000;
 
 const DataLogsModel = () => {
   // 查询关键字

@@ -31,3 +31,11 @@
     user-select: text;
   }
 }
+
+// Popover 内容渲染在 portal 中，需为顶层类名才能命中
+.downloadMenu {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+}

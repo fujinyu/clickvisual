@@ -3,8 +3,8 @@ import { PaneType } from "@/models/datalogs/types";
 import rawLogsOperationsStyles from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogsOperations/index.less";
 import HistogramSwitch from "@/pages/DataLogs/components/QueryResult/Content/RawLog/RawLogsOperations/SwitchLeft";
 import { useModel } from "@umijs/max";
-import { DownloadOutlined, FileTextOutlined } from "@ant-design/icons";
-import { Button, message, Pagination } from "antd";
+import { DownloadOutlined } from "@ant-design/icons";
+import { Button, message, Pagination, Popover } from "antd";
 import { useMemo, useState } from "react";
 import { useIntl } from "umi";
 
@@ -25,11 +25,11 @@ const RawLogsOperations = ({ oldPane }: { oldPane: PaneType | undefined }) => {
 
   const i18n = useIntl();
 
-  const [downloading, setDownloading] = useState<"json" | "raw" | null>(null);
+  const [downloading, setDownloading] = useState<boolean>(false);
 
   const handleDownload = async (format: "json" | "raw") => {
     if (downloading) return;
-    setDownloading(format);
+    setDownloading(true);
     try {
       const result = await downloadLogs(format);
       if (result.count === 0) {
@@ -56,7 +56,7 @@ const RawLogsOperations = ({ oldPane }: { oldPane: PaneType | undefined }) => {
           : i18n.formatMessage({ id: "log.download.failed" })
       );
     } finally {
-      setDownloading(null);
+      setDownloading(false);
     }
   };
 
@@ -79,24 +79,37 @@ const RawLogsOperations = ({ oldPane }: { oldPane: PaneType | undefined }) => {
     <div className={rawLogsOperationsStyles.rawLogsOperationsMain}>
       <div className={rawLogsOperationsStyles.operationsBtn}>
         <HistogramSwitch oldPane={oldPane} />
-        <Button
-          size="small"
-          type="text"
-          icon={<DownloadOutlined />}
-          loading={downloading === "json"}
-          disabled={!!downloading && downloading !== "json"}
-          title={i18n.formatMessage({ id: "log.download.json" })}
-          onClick={() => handleDownload("json")}
-        />
-        <Button
-          size="small"
-          type="text"
-          icon={<FileTextOutlined />}
-          loading={downloading === "raw"}
-          disabled={!!downloading && downloading !== "raw"}
-          title={i18n.formatMessage({ id: "log.download.raw" })}
-          onClick={() => handleDownload("raw")}
-        />
+        <Popover
+          trigger="click"
+          placement="bottomLeft"
+          content={
+            <div className={rawLogsOperationsStyles.downloadMenu}>
+              <Button
+                block
+                type="text"
+                disabled={downloading}
+                onClick={() => handleDownload("json")}
+              >
+                {i18n.formatMessage({ id: "log.download.json" })}
+              </Button>
+              <Button
+                block
+                type="text"
+                disabled={downloading}
+                onClick={() => handleDownload("raw")}
+              >
+                {i18n.formatMessage({ id: "log.download.raw" })}
+              </Button>
+            </div>
+          }
+        >
+          <Button
+            size="small"
+            type="text"
+            icon={<DownloadOutlined />}
+            loading={downloading}
+          />
+        </Popover>
       </div>
       {performTime ? (
         <div className={rawLogsOperationsStyles.duration}>
