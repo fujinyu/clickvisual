@@ -550,6 +550,7 @@ export default {
 
   // Data Logs-Raw Logs
   "log.empty.logLibrary": "请选择需要查询的日志库",
+  "log.tab.closeOther": "关闭其他标签页",
   "log.search.placeholder": "请输入查询语句",
   "log.search.codeHinting.historyQuery": "历史查询",
   "log.search.codeHinting.analysisField": "分析字段",

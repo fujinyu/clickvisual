@@ -49,6 +49,16 @@ const useLogPanes = () => {
     setPaneKeys((paneKeys) => paneKeys.filter((item) => item !== key));
   };
 
+  // 单条删除必须走一次 setState，循环调用 removeLogPane 会因闭包取到旧的 logPanes 而互相覆盖
+  const removeOtherLogPanes = (keepKey: string) => {
+    const currentPanes = { ...logPanes };
+    Object.keys(currentPanes).forEach((key) => {
+      if (key !== keepKey) delete currentPanes[key];
+    });
+    setLogPanes(currentPanes);
+    setPaneKeys((paneKeys) => paneKeys.filter((item) => item === keepKey));
+  };
+
   const addLogPane = (key: string, pane: PaneType) => {
     if (!paneKeys.includes(pane.paneId)) {
       setPaneKeys((paneKeys) => [...paneKeys, key]);
@@ -97,6 +107,7 @@ const useLogPanes = () => {
     paneKeys,
     addLogPane,
     removeLogPane,
+    removeOtherLogPanes,
     updateLogPane,
     resetPane,
   };

@@ -583,6 +583,7 @@ export default {
 
   // Data Logs-Raw Logs
   "log.empty.logLibrary": "Please select need to query log library",
+  "log.tab.closeOther": "Close other tabs",
   "log.search.placeholder": "Please enter a query",
   "log.search.codeHinting.historyQuery": "History",
   "log.search.codeHinting.analysisField": "Field",

@@ -4,9 +4,9 @@ import rawLogTabsStyles from "@/pages/DataLogs/components/RawLogTabs/index.less"
 import { RestUrlStates } from "@/pages/DataLogs/hooks/useLogUrlParams";
 import useTimeOptions from "@/pages/DataLogs/hooks/useTimeOptions";
 import useUrlState from "@ahooksjs/use-url-state";
-import { FullscreenOutlined } from "@ant-design/icons";
+import { CloseSquareOutlined, FullscreenOutlined } from "@ant-design/icons";
 import { useModel } from "@umijs/max";
-import { Button, Empty, Tabs } from "antd";
+import { Button, Empty, Space, Tabs, Tooltip } from "antd";
 import lodash from "lodash";
 import { useEffect, useMemo } from "react";
 import { useIntl } from "umi";
@@ -24,7 +24,8 @@ const RawLogTabs = () => {
     onChangeFoldingState,
   } = useModel("dataLogs");
   const { onChangeSelectKeys } = useModel("instances");
-  const { logPanes, paneKeys, removeLogPane } = logPanesHelper;
+  const { logPanes, paneKeys, removeLogPane, removeOtherLogPanes } =
+    logPanesHelper;
   const { onSetLocalData } = useLocalStorages();
 
   const i18n = useIntl();
@@ -64,6 +65,13 @@ const RawLogTabs = () => {
     if (!tabPane) return;
     handleChangeRelativeAmountAndUnit(tabPane);
     onChangeLogPane(tabPane);
+  };
+
+  // 关闭除当前选中之外的所有 tab
+  const handleCloseOtherTabs = () => {
+    const keepKey = currentLogLibrary?.id.toString();
+    if (!keepKey || !logPanes[keepKey]) return;
+    removeOtherLogPanes(keepKey);
   };
 
   // 全屏/取消全屏 事件
@@ -152,11 +160,22 @@ const RawLogTabs = () => {
           style={{ width: `calc(100vw - ${110 + resizeMenuWidth}px)` }}
           items={items}
           tabBarExtraContent={
-            <Button
-              type="link"
-              icon={<FullscreenOutlined />}
-              onClick={handleFullScreen}
-            />
+            <Space size={0}>
+              <Tooltip
+                title={i18n.formatMessage({ id: "log.tab.closeOther" })}
+              >
+                <Button
+                  type="link"
+                  icon={<CloseSquareOutlined />}
+                  onClick={handleCloseOtherTabs}
+                />
+              </Tooltip>
+              <Button
+                type="link"
+                icon={<FullscreenOutlined />}
+                onClick={handleFullScreen}
+              />
+            </Space>
           }
         />
       ) : (
