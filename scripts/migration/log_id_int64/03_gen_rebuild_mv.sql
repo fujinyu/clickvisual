@@ -15,7 +15,7 @@
 -- 用法：
 --   curl.exe -sS --user admin:<pwd> http://<host>:8123/ --data-binary (Get-Content -Raw .\03_gen_rebuild_mv.sql) > out_rebuild_mv.sql
 --   然后【人工审阅】 out_rebuild_mv.sql，再在维护窗口内按“先 DROP 后 CREATE、逐表”执行。
--- 推荐执行序（单表）：DROP MV -> (02 的该表 ALTER：先流表后目标表) -> CREATE MV。
+-- 推荐执行序（单表）：DROP MV -> (流表 DROP+CREATE 重建 + 02 的目标表 ALTER) -> CREATE MV。
 -- 只迁移部分库时：修改下方 database IN (...) 白名单即可。
 -- =============================================================================
 SELECT concat(

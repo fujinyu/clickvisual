@@ -32,7 +32,7 @@
 按引擎分布（Float64 的 log_id/time_ns）：
 
 - MergeTree（目标表 `<t>`）：log_id 343、time_ns 200
-- Kafka（流表 `<t>_stream`，即 JSONEachRow 模式）：log_id 39、time_ns 42
+- Kafka（流表 `<t>_stream`，即 JSONEachRow 模式）：log_id 39、time_ns 42（流表用 DROP+CREATE 重建，不做 ALTER）
 - MaterializedView（`<t>_view`）：log_id 270、time_ns 199（MV 用 DROP+CREATE 重建，不做 ALTER）
 
 两种建表模式：
@@ -53,8 +53,10 @@
 
 ## 3. 迁移原理（每张表三步）
 
-1. **改列类型（ClickHouse ALTER）**：目标表 + 流表的 `log_id`/`time_ns`
-   由 `Float64`/`Nullable(Float64)` 改为 `Int64`/`Nullable(Int64)`。
+1. **改列类型**：`log_id`/`time_ns` 由 `Float64`/`Nullable(Float64)` 改为 `Int64`/`Nullable(Int64)`。
+   - **目标表（MergeTree）**：用 `ALTER TABLE ... MODIFY COLUMN`。
+   - **流表（Kafka 引擎）**：**不支持 `ALTER MODIFY COLUMN`**（会抛 `code: 48 ... is not supported by storage Kafka`），
+     必须 **DROP + CREATE 重建**（用 Int64 版映射重建流表；Kafka 按消费组 offset 保留消息，不丢数据）。
 2. **重建 MV（DROP + CREATE）**：把 MV 里 `JSONExtractFloat(..., 'log_id'|'time_ns')`
    改为 `JSONExtractInt(...)`，并把 MV 列声明中的 `log_id`/`time_ns` 由 `Float64` 改为 `Int64`。
    - 推荐路径 A（最稳）：改完 `any_json`（第 4 步）后，通过 ClickVisual 触发表更新，
@@ -63,7 +65,7 @@
      该生成器只改写标准写法的 log_id/time_ns，怪异写法保持原样。
    - 路径 C（单表、界面）：日志页右键日志库选“重建采集结构”，
      后端 `POST /api/v1/tables/:id/rebuild` 自动按序完成上述三步
-     （修正 any_json → ALTER 目标表/流表列 → 经 updateSwitcher 重建全部 MV），
+     （修正 any_json → ALTER 目标表列 + DROP/CREATE 重建 Kafka 流表 → 经 updateSwitcher 重建全部 MV），
      失败时回滚 any_json。适合逐表/小批量迁移；大批量仍建议路径 A/B。
 3. **更新元数据（MySQL any_json）**：把建表映射里 log_id/time_ns 的 `Float64` 改为 `Int64`，
    否则日后在 ClickVisual 里编辑该表索引会按旧类型重建 MV，精度又退化。
@@ -82,7 +84,7 @@
 
 ```
 1) DROP MV            <t>_view          -- 先停消费/解绑
-2) ALTER 流表列        <t>_stream        -- 仅 JSONEachRow 有 log_id/time_ns 列，JSONAsString 自动跳过
+2) DROP+CREATE流表        <t>_stream        -- Kafka 不支持 ALTER；仅 JSONEachRow 有 log_id/time_ns 列，JSONAsString 自动跳过
 3) ALTER 目标表列      <t>
 4) CREATE MV          <t>_view          -- 用 Int64 版本重建
 5)（全部表完成后）更新 MySQL any_json
@@ -98,7 +100,7 @@
 | 文件 | 作用 | 运行位置 |
 | --- | --- | --- |
 | `01_inspect.sql` | 只读盘点：受影响表/列、按库按引擎分类、列出怪异写法与 String 排除项 | ClickHouse |
-| `02_gen_alter_columns.sql` | 生成器：输出所有 `ALTER TABLE ... MODIFY COLUMN ... Int64` | ClickHouse |
+| `02_gen_alter_columns.sql` | 生成器：输出 MergeTree 目标表的 `ALTER TABLE ... MODIFY COLUMN ... Int64`（Kafka 流表须 DROP+CREATE 重建，不在此） | ClickHouse |
 | `03_gen_rebuild_mv.sql` | 生成器：输出所有 MV 的 `DROP + CREATE`（Int64 版） | ClickHouse |
 | `04_update_anyjson.mysql.sql` | 更新 ClickVisual 元数据 `base_table.any_json`（含先查后改） | MySQL |
 | `05_verify.sql` | 迁移后校验：列类型、MV 提取函数、排序稳定性抽样 | ClickHouse |
@@ -131,7 +133,7 @@ curl.exe -sS --user $auth $url --data-binary (Get-Content -Raw .\03_gen_rebuild_
 
 ## 7. 回滚
 
-- 列类型：Int64 → Float64 可再次 `MODIFY COLUMN` 回退（数据为整数值，回退无损）。
+- 列类型：Int64 → Float64 可再次 `MODIFY COLUMN` 回退（数据为整数值，回退无损）；Kafka 流表回退同理走 DROP+CREATE，不能用 MODIFY COLUMN。
 - MV：`03_gen_rebuild_mv.sql` 生成的是 `DROP + CREATE`；执行前请先用
   `SELECT create_table_query FROM system.tables WHERE ...` 导出**当前** MV 原始 DDL 备份，
   回滚时用备份 DDL 重新 CREATE 即可。

@@ -2179,6 +2179,35 @@ func (c *ClickHouseX) orderByClause(orderByField, orderBy string, tid int) strin
 	return clause
 }
 
+// int64ColumnAlter 描述一个待执行 MODIFY COLUMN 的物理列（仅非 Kafka 引擎）。
+type int64ColumnAlter struct {
+	table   string
+	name    string
+	newType string
+}
+
+// planInt64Rebuild 按引擎拆分待修复列：
+//   - 非 Kafka 引擎（MergeTree 目标表）→ 追加到 alters，走 MODIFY COLUMN 改列类型；
+//   - Kafka 引擎（流表）→ 不支持 ALTER（code 48），置 rebuildStream，整表 DROP+CREATE 重建。
+// rows 为 system.columns JOIN system.tables 的结果，含 table/name/type/engine 字段。
+func planInt64Rebuild(rows []map[string]interface{}) (alters []int64ColumnAlter, rebuildStream bool) {
+	for _, row := range rows {
+		if engine, _ := row["engine"].(string); engine == "Kafka" {
+			rebuildStream = true
+			continue
+		}
+		tableName, _ := row["table"].(string)
+		colName, _ := row["name"].(string)
+		colType, _ := row["type"].(string)
+		newType := "Int64"
+		if strings.HasPrefix(colType, "Nullable(") {
+			newType = "Nullable(Int64)"
+		}
+		alters = append(alters, int64ColumnAlter{table: tableName, name: colName, newType: newType})
+	}
+	return alters, rebuildStream
+}
+
 // RebuildStorageInt64 按正确整数类型重建当前日志库的采集链路：
 // 将 log_id/time_ns 由 Float64 修正为 Int64（采集元数据 + 目标表/流表物理列），
 // 并沿既有 updateSwitcher 路径重建默认物化视图与各自定义时间字段物化视图。
@@ -2221,24 +2250,19 @@ func (c *ClickHouseX) RebuildStorageInt64(tid int) (msg string, err error) {
 		return "", err
 	}
 	candidates := []string{tableInfo.Name, tableInfo.Name + "_local", tableInfo.Name + "_stream", tableInfo.Name + "_local_stream"}
-	query := fmt.Sprintf("SELECT table, name, type FROM system.columns WHERE database = '%s' AND table IN ('%s') AND name IN ('%s', '%s') AND type IN ('Float64', 'Nullable(Float64)')",
+	// JOIN system.tables 取引擎：Kafka 流表不支持 MODIFY COLUMN（code 48），须改走 DROP+CREATE 重建
+	query := fmt.Sprintf("SELECT c.table AS table, c.name AS name, c.type AS type, t.engine AS engine FROM system.columns AS c INNER JOIN system.tables AS t ON c.database = t.database AND c.table = t.name WHERE c.database = '%s' AND c.table IN ('%s') AND c.name IN ('%s', '%s') AND c.type IN ('Float64', 'Nullable(Float64)')",
 		database.Name, strings.Join(candidates, "','"), db.LogIdField, db.TimeNsField)
 	columns, err := c.doQueryWithRetry(query, false)
 	if err != nil {
 		return "", err
 	}
+	alters, rebuildStream := planInt64Rebuild(columns)
 	columnAlters := 0
-	for _, row := range columns {
-		tableName, _ := row["table"].(string)
-		colName, _ := row["name"].(string)
-		colType, _ := row["type"].(string)
-		newType := "Int64"
-		if strings.HasPrefix(colType, "Nullable(") {
-			newType = "Nullable(Int64)"
-		}
-		alterSQL := fmt.Sprintf("ALTER TABLE `%s`.`%s` MODIFY COLUMN `%s` %s;", database.Name, tableName, colName, newType)
+	for _, alt := range alters {
+		alterSQL := fmt.Sprintf("ALTER TABLE `%s`.`%s` MODIFY COLUMN `%s` %s;", database.Name, alt.table, alt.name, alt.newType)
 		if isCluster == ModeCluster {
-			alterSQL = fmt.Sprintf("ALTER TABLE `%s`.`%s` ON CLUSTER `%s` MODIFY COLUMN `%s` %s;", database.Name, tableName, database.Cluster, colName, newType)
+			alterSQL = fmt.Sprintf("ALTER TABLE `%s`.`%s` ON CLUSTER `%s` MODIFY COLUMN `%s` %s;", database.Name, alt.table, database.Cluster, alt.name, alt.newType)
 		}
 		if _, errExec := c.db.Exec(alterSQL); errExec != nil {
 			elog.Error("RebuildStorageInt64", elog.String("alterSQL", alterSQL), l.E(errExec))
@@ -2246,12 +2270,36 @@ func (c *ClickHouseX) RebuildStorageInt64(tid int) (msg string, err error) {
 		}
 		columnAlters++
 	}
-	if mappingFixed == 0 && columnAlters == 0 {
+	// Kafka 流表：MODIFY COLUMN 不被支持（code 48），复用 CreateKafkaTable 按修正后的 Int64 映射
+	// DROP+CREATE 重建（与“编辑采集配置”同一路径）；MV 在 step 4 随之重建，
+	// 重建期间 Kafka 按消费组 offset 保留消息，不丢数据。
+	streamSQL := ""
+	if rebuildStream {
+		tableInfo.AnyJSON = rsc.JSON()
+		streamParams := view.ReqStorageUpdate{
+			KafkaBrokers:            tableInfo.Brokers,
+			KafkaTopic:              tableInfo.Topic,
+			KafkaConsumerNum:        tableInfo.ConsumerNum,
+			KafkaSkipBrokenMessages: tableInfo.KafkaSkipBrokenMessages,
+		}
+		if streamSQL, err = c.CreateKafkaTable(&tableInfo, streamParams); err != nil {
+			elog.Error("RebuildStorageInt64", elog.String("step", "rebuildStream"), l.E(err))
+			return "", err
+		}
+	}
+	if mappingFixed == 0 && columnAlters == 0 && !rebuildStream {
 		return "no Float64 log_id/time_ns found, nothing to rebuild", nil
 	}
-	// step 3 回写修正后的元数据（updateSwitcher 依据 any_json 重建物化视图）
+	// step 3 回写修正后的元数据（updateSwitcher 依据 any_json 重建物化视图；sql_stream 与重建后流表保持一致）
+	metaUps := make(map[string]interface{})
 	if mappingFixed > 0 {
-		if err = db.TableUpdate(invoker.Db, tid, map[string]interface{}{"any_json": rsc.JSON()}); err != nil {
+		metaUps["any_json"] = rsc.JSON()
+	}
+	if streamSQL != "" {
+		metaUps["sql_stream"] = streamSQL
+	}
+	if len(metaUps) > 0 {
+		if err = db.TableUpdate(invoker.Db, tid, metaUps); err != nil {
 			return "", err
 		}
 	}
@@ -2307,7 +2355,7 @@ func (c *ClickHouseX) RebuildStorageInt64(tid int) (msg string, err error) {
 		c.rollbackAnyJSON(tid, originalAnyJSON, mappingFixed)
 		return "", err
 	}
-	return fmt.Sprintf("rebuild finished: mapping fields fixed=%d, columns altered=%d, views rebuilt=%d", mappingFixed, columnAlters, viewsRebuilt+1), nil
+	return fmt.Sprintf("rebuild finished: mapping fields fixed=%d, columns altered=%d, stream rebuilt=%t, views rebuilt=%d", mappingFixed, columnAlters, rebuildStream, viewsRebuilt+1), nil
 }
 
 // rollbackAnyJSON 重建失败时恢复采集元数据，避免元数据与物理结构不一致。

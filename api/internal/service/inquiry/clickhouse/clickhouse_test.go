@@ -1,6 +1,7 @@
 package clickhouse
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -349,5 +350,66 @@ func Test_timeParseSQLV3_TimeNsFallback(t *testing.T) {
 	got := c.timeParseSQLV3(factory.TableTypeFloat, nil, "time")
 	if !strings.Contains(got, "if(JSONExtractFloat(body, 'time_ns') > 0") || !strings.Contains(got, "*1000000000") {
 		t.Fatalf("timeParseSQLV3() missing time_ns fallback: %s", got)
+	}
+}
+
+// planInt64Rebuild 必须按引擎区分处理：MergeTree 目标表走 MODIFY COLUMN 改列类型；
+// Kafka 流表不支持 ALTER（会抛 code 48），只能整表 DROP+CREATE 重建，因此不能出现在
+// alters 列表里，而应把 rebuildStream 置真。
+func Test_planInt64Rebuild(t *testing.T) {
+	tests := []struct {
+		name        string
+		rows        []map[string]interface{}
+		wantAlters  []int64ColumnAlter
+		wantRebuild bool
+	}{
+		{
+			name: "mergetree target uses modify column with nullable detected",
+			rows: []map[string]interface{}{
+				{"table": "order_track", "name": "log_id", "type": "Float64", "engine": "MergeTree"},
+				{"table": "order_track", "name": "time_ns", "type": "Nullable(Float64)", "engine": "MergeTree"},
+			},
+			wantAlters: []int64ColumnAlter{
+				{table: "order_track", name: "log_id", newType: "Int64"},
+				{table: "order_track", name: "time_ns", newType: "Nullable(Int64)"},
+			},
+			wantRebuild: false,
+		},
+		{
+			name: "kafka stream triggers rebuild and is excluded from alters",
+			rows: []map[string]interface{}{
+				{"table": "ehub_track_info_stream", "name": "log_id", "type": "Float64", "engine": "Kafka"},
+			},
+			wantAlters:  nil,
+			wantRebuild: true,
+		},
+		{
+			name: "mixed target and stream",
+			rows: []map[string]interface{}{
+				{"table": "ehub_track_info", "name": "log_id", "type": "Float64", "engine": "MergeTree"},
+				{"table": "ehub_track_info_stream", "name": "log_id", "type": "Float64", "engine": "Kafka"},
+			},
+			wantAlters: []int64ColumnAlter{
+				{table: "ehub_track_info", name: "log_id", newType: "Int64"},
+			},
+			wantRebuild: true,
+		},
+		{
+			name:        "empty rows produce nothing",
+			rows:        nil,
+			wantAlters:  nil,
+			wantRebuild: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotAlters, gotRebuild := planInt64Rebuild(tt.rows)
+			if !reflect.DeepEqual(gotAlters, tt.wantAlters) {
+				t.Errorf("planInt64Rebuild() alters = %v, want %v", gotAlters, tt.wantAlters)
+			}
+			if gotRebuild != tt.wantRebuild {
+				t.Errorf("planInt64Rebuild() rebuildStream = %v, want %v", gotRebuild, tt.wantRebuild)
+			}
+		})
 	}
 }

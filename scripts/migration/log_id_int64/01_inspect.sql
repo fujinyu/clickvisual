@@ -31,7 +31,7 @@ ORDER BY db, tbl
 FORMAT PrettyCompact;
 
 -- [3] JSONEachRow 模式识别：流表(<t>_stream)本身含 log_id/time_ns 列的表
---     这些表的“流表列”也需要 ALTER；其余（JSONAsString）流表只有 _log，无需改流表。
+--     这些表的流表须 DROP+CREATE 重建（Kafka 引擎不支持 ALTER MODIFY COLUMN）；其余（JSONAsString）流表只有 _log，无需改流表。
 SELECT c.database AS db, c.table AS stream_tbl, c.name AS col, c.type AS type
 FROM system.columns AS c
 INNER JOIN system.tables AS t ON c.database = t.database AND c.table = t.name
