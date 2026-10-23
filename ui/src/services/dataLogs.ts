@@ -135,6 +135,8 @@ export interface TablesResponse {
   createType: number;
   desc: string;
   relTraceTableId: number;
+  suspendStatus?: number;
+  suspendable?: boolean;
 }
 
 export interface TableInfoResponse {
@@ -520,6 +522,26 @@ export default {
       process.env.PUBLIC_PATH + `api/v1/log-library-management/tables/${id}`,
       {
         method: "DELETE",
+      }
+    );
+  },
+
+  // Pause ClickHouse ingestion by detaching the Kafka stream table
+  async suspendTable(id: number) {
+    return request<API.Res<string>>(
+      process.env.PUBLIC_PATH + `api/v1/log-library-management/tables/${id}/suspend`,
+      {
+        method: "POST",
+      }
+    );
+  },
+
+  // Resume ClickHouse ingestion by attaching the Kafka stream table back
+  async resumeTable(id: number) {
+    return request<API.Res<string>>(
+      process.env.PUBLIC_PATH + `api/v1/log-library-management/tables/${id}/resume`,
+      {
+        method: "POST",
       }
     );
   },

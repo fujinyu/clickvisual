@@ -17,6 +17,13 @@ const (
 	TimeFieldTypeDT9    = 5 // DataTime64(9)
 )
 
+// suspend_status values: whether the Kafka stream table of the log store is
+// attached in ClickHouse. See scripts/migration/logstore_suspend/.
+const (
+	SuspendStatusAttached int = 0
+	SuspendStatusDetached int = 1
+)
+
 type BaseTable struct {
 	BaseModel
 	Uid          int    `gorm:"column:uid;type:int(11)" json:"uid"`                                           // operator uid
@@ -44,6 +51,12 @@ type BaseTable struct {
 	StoragePolicy string `gorm:"column:storage_policy;type:varchar(64);NOT NULL;default:''" json:"storagePolicy"` // storage_policy name, empty means disabled
 	ColdVolume    string `gorm:"column:cold_volume;type:varchar(64);NOT NULL;default:''" json:"coldVolume"`       // TTL TO VOLUME target, empty means disabled
 	HotDays       int    `gorm:"column:hot_days;type:int(11);default:0" json:"hotDays"`                            // days on hot volume before moving to cold
+
+	// Ingestion pause state. 1 means the Kafka stream table of this log store is
+	// DETACHed in ClickHouse, so nothing is consumed or inserted; messages pile up
+	// in the topic until it is resumed. Requires scripts/migration/
+	// logstore_suspend/01_alter_cv_base_table.mysql.sql.
+	SuspendStatus int `gorm:"column:suspend_status;type:tinyint(1);NOT NULL;default:0" json:"suspendStatus"`
 
 	// Deprecated: use CreateType instead
 	IsKafkaTimestamp int `gorm:"column:is_kafka_timestamp;type:tinyint(1)" json:"isKafkaTimestamp"`

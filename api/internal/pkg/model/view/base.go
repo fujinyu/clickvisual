@@ -219,6 +219,12 @@ type (
 		Desc            string `json:"desc"`
 		V3TableType     int    `json:"v3TableType"`
 		RelTraceTableId int    `json:"relTraceTableId"`
+		// SuspendStatus 1 means the Kafka stream table is detached and ingestion is
+		// paused; the UI shows the resume action instead of the suspend one.
+		SuspendStatus int `json:"suspendStatus"`
+		// Suspendable whether this log store is fed by a Kafka stream table at all.
+		// Self-built and trace-calculation tables have none, so the action is hidden.
+		Suspendable bool `json:"suspendable"`
 	}
 )
 

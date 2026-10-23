@@ -240,10 +240,12 @@ func TableList(c *core.Context) {
 			continue
 		}
 		res = append(res, view.RespTableSimple{
-			Id:         row.ID,
-			TableName:  row.Name,
-			CreateType: row.CreateType,
-			Desc:       row.Desc,
+			Id:              row.ID,
+			TableName:       row.Name,
+			CreateType:      row.CreateType,
+			Desc:            row.Desc,
+			SuspendStatus:   row.SuspendStatus,
+			Suspendable:     constx.IsKafkaPipelineTable(row.CreateType),
 		})
 	}
 	c.JSONOK(res)
@@ -284,6 +286,12 @@ func TableDelete(c *core.Context) {
 	}
 	if len(alarms) > 0 {
 		c.JSONE(core.CodeErr, "you should delete all alarms before delete table.", nil)
+		return
+	}
+	// A detached stream table is invisible to DROP TABLE IF EXISTS, which would
+	// leave its metadata behind on disk and break a later CREATE.
+	if err = service.TableSuspendGuard(tableInfo.SuspendStatus); err != nil {
+		c.JSONE(core.CodeErr, err.Error(), nil)
 		return
 	}
 	tx := invoker.Db.Begin()
@@ -356,6 +364,40 @@ func TableDelete(c *core.Context) {
 	}
 	event.Event.InquiryCMDB(c.User(), db.OpnTablesDelete, map[string]interface{}{"tableInfo": tableInfo})
 	c.JSONOK("delete succeeded. Note that Kafka may be backlogged.")
+}
+
+// TableSuspend
+// @Tags         LOGSTORE
+// @Summary      暂停日志库入库（DETACH Kafka 流表，消息在 topic 堆积）
+func TableSuspend(c *core.Context) {
+	id := cast.ToInt(c.Param("id"))
+	if id == 0 {
+		c.JSONE(1, "invalid parameter", nil)
+		return
+	}
+	if err := service.TableSuspend(id); err != nil {
+		c.JSONE(core.CodeErr, "suspend failed: "+err.Error(), nil)
+		return
+	}
+	event.Event.InquiryCMDB(c.User(), db.OpnTablesUpdate, map[string]interface{}{"tid": id, "suspend": true})
+	c.JSONOK("ingestion paused: the kafka stream table is detached and messages now pile up in the topic")
+}
+
+// TableResume
+// @Tags         LOGSTORE
+// @Summary      恢复日志库入库（ATTACH Kafka 流表，从已提交位点补灌）
+func TableResume(c *core.Context) {
+	id := cast.ToInt(c.Param("id"))
+	if id == 0 {
+		c.JSONE(1, "invalid parameter", nil)
+		return
+	}
+	if err := service.TableResume(id); err != nil {
+		c.JSONE(core.CodeErr, "resume failed: "+err.Error(), nil)
+		return
+	}
+	event.Event.InquiryCMDB(c.User(), db.OpnTablesUpdate, map[string]interface{}{"tid": id, "suspend": false})
+	c.JSONOK("ingestion resumed: the backlog of the topic is being re-ingested")
 }
 
 // TableLogs
@@ -971,6 +1013,10 @@ func TableRebuild(c *core.Context) {
 		DomainId:    strconv.Itoa(id),
 	}); err != nil {
 		c.JSONE(1, "permission verification failed", err)
+		return
+	}
+	if err = service.TableSuspendGuard(tableInfo.SuspendStatus); err != nil {
+		c.JSONE(core.CodeErr, err.Error(), nil)
 		return
 	}
 	op, err := service.InstanceManager.Load(tableInfo.Database.Iid)

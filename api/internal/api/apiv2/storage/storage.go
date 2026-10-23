@@ -251,6 +251,12 @@ func Update(c *core.Context) {
 		c.JSONE(1, "permission verification failed", err)
 		return
 	}
+	// The update path drops and re-creates the stream table; a detached one is
+	// invisible to DROP IF EXISTS and would collide with the CREATE.
+	if err = service.TableSuspendGuard(tableInfo.SuspendStatus); err != nil {
+		c.JSONE(core.CodeErr, err.Error(), nil)
+		return
+	}
 	op, err := service.InstanceManager.Load(tableInfo.Database.Iid)
 	if err != nil {
 		c.JSONE(1, "update failed 01: "+err.Error(), nil)

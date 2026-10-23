@@ -150,6 +150,12 @@ func LogLibraryCopy(c *core.Context) {
 			result.Failed = append(result.Failed, fmt.Sprintf("#%d", id))
 			continue
 		}
+		if sourceTable.SuspendStatus == db.SuspendStatusDetached {
+			// Its stream table is detached, so reading the source structure back
+			// would fail with a message nobody can act on.
+			result.Failed = append(result.Failed, sourceTable.Name+" (ingestion is paused, resume it before copying)")
+			continue
+		}
 		if targetTableNames[sourceTable.Name] {
 			result.Skipped = append(result.Skipped, sourceTable.Name)
 			continue

@@ -6,6 +6,7 @@ import (
 	"github.com/ego-component/egorm"
 
 	"github.com/clickvisual/clickvisual/api/internal/invoker"
+	"github.com/clickvisual/clickvisual/api/internal/pkg/constx"
 	db2 "github.com/clickvisual/clickvisual/api/internal/pkg/model/db"
 	view2 "github.com/clickvisual/clickvisual/api/internal/pkg/model/view"
 	"github.com/clickvisual/clickvisual/api/internal/service/permission/pmsplugin"
@@ -72,6 +73,8 @@ func DatabaseListFilterPms(uid int) (res []view2.RespDatabaseSimple, err error) 
 			Desc:            row.Desc,
 			V3TableType:     row.V3TableType,
 			RelTraceTableId: row.TraceTableId,
+			SuspendStatus:   row.SuspendStatus,
+			Suspendable:     constx.IsKafkaPipelineTable(row.CreateType),
 		})
 		dMap[row.Database.ID] = item
 	}

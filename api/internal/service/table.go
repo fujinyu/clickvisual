@@ -10,6 +10,7 @@ import (
 	"github.com/clickvisual/clickvisual/api/internal/pkg/model/db"
 	"github.com/clickvisual/clickvisual/api/internal/pkg/model/view"
 	"github.com/clickvisual/clickvisual/api/internal/pkg/utils/mapping"
+	"github.com/clickvisual/clickvisual/api/internal/service/inquiry/factory"
 	"github.com/clickvisual/clickvisual/api/internal/service/permission/pmsplugin"
 )
 
@@ -20,6 +21,86 @@ func TableViewIsPermission(uid, iid, did, tid int) bool {
 
 func tableViewIsPermission(uid, iid, did, tid int, subResource string) bool {
 	return pmsplugin.GetUserViewSummary(uid).TableSubResourceVisible(iid, did, tid, subResource)
+}
+
+// ErrTableSuspended is returned by the mutation paths which cannot run against a
+// log store whose stream table is detached: DROP TABLE IF EXISTS would silently
+// skip it and leave the metadata behind on disk.
+var ErrTableSuspended = errors.New("ingestion of this log store is paused: resume it first")
+
+// TableSuspendGuard rejects such a mutation. Callers pass tableInfo.SuspendStatus.
+func TableSuspendGuard(suspendStatus int) error {
+	if suspendStatus == db.SuspendStatusDetached {
+		return ErrTableSuspended
+	}
+	return nil
+}
+
+// TableSuspend pauses ingestion by detaching the Kafka stream table of the log
+// store. Nothing consumes the topic while it is detached, and the offsets are
+// not committed, so the messages pile up and TableResume re-reads them.
+func TableSuspend(tid int) error {
+	tableInfo, err := loadSuspendableTable(tid)
+	if err != nil {
+		return err
+	}
+	suspender, err := streamSuspenderOf(tableInfo)
+	if err != nil {
+		return err
+	}
+	if err = suspender.SuspendStream(tableInfo); err != nil {
+		return err
+	}
+	return db.TableUpdate(invoker.Db, tid, map[string]interface{}{
+		"suspend_status": db.SuspendStatusDetached,
+	})
+}
+
+// TableResume re-attaches the stream table, which resumes the consumer group
+// "<database>_<table>" from its committed offset.
+func TableResume(tid int) error {
+	tableInfo, err := loadSuspendableTable(tid)
+	if err != nil {
+		return err
+	}
+	suspender, err := streamSuspenderOf(tableInfo)
+	if err != nil {
+		return err
+	}
+	if err = suspender.ResumeStream(tableInfo); err != nil {
+		return err
+	}
+	return db.TableUpdate(invoker.Db, tid, map[string]interface{}{
+		"suspend_status": db.SuspendStatusAttached,
+	})
+}
+
+// loadSuspendableTable rejects the log stores which have no Kafka stream table
+// to detach: self-built, trace calculation and buffer-null tables.
+func loadSuspendableTable(tid int) (*db.BaseTable, error) {
+	tableInfo, err := db.TableInfo(invoker.Db, tid)
+	if err != nil {
+		return nil, err
+	}
+	if tableInfo.ID == 0 {
+		return nil, errors.Errorf("table not found: %d", tid)
+	}
+	if !constx.IsKafkaPipelineTable(tableInfo.CreateType) {
+		return nil, errors.New("only log stores fed by a kafka stream table can be suspended")
+	}
+	return &tableInfo, nil
+}
+
+func streamSuspenderOf(tableInfo *db.BaseTable) (factory.StreamSuspender, error) {
+	op, err := InstanceManager.Load(tableInfo.Database.Iid)
+	if err != nil {
+		return nil, err
+	}
+	suspender, ok := op.(factory.StreamSuspender)
+	if !ok {
+		return nil, errors.New("current datasource does not support suspending ingestion")
+	}
+	return suspender, nil
 }
 
 func IsCheckInner(createType int) bool {

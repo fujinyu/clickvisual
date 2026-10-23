@@ -23,6 +23,8 @@ import {
   FundProjectionScreenOutlined,
   FundViewOutlined,
   LinkOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
 import { useModel } from "@umijs/max";
@@ -68,6 +70,7 @@ const LogLibraryItem = (props: LogLibraryItemProps) => {
     onChangeLinkLinkLogLibrary,
     doGetColumns,
     onChangeColumsList,
+    getLogLibraries,
   } = useModel("dataLogs");
   const { logPanes, addLogPane } = logPanesHelper;
   const rawLogsIndexeListRef = useRef<IndexInfoType[] | undefined>(
@@ -159,6 +162,8 @@ const LogLibraryItem = (props: LogLibraryItemProps) => {
     return `${LOGTOPOLOGY_PATH}?iid=${res?.data.database.iid}&dName=${res?.data.database.name}&tName=${logLibrary.tableName}&navKey=realtime`;
   };
 
+  const isSuspended = logLibrary.suspendStatus === 1;
+
   const items = useMemo(() => {
     let item: any = [
       {
@@ -233,6 +238,44 @@ const LogLibraryItem = (props: LogLibraryItemProps) => {
         icon: <ReloadOutlined />,
         disabled: logLibrary.createType === 1 || logLibrary.v3TableType === 1,
       },
+      {
+        label: i18n.formatMessage({
+          id: isSuspended
+            ? "datasource.tooltip.icon.resume"
+            : "datasource.tooltip.icon.suspend",
+        }),
+        key: "log-suspend",
+        onClick: () => {
+          Modal.confirm({
+            title: i18n.formatMessage({
+              id: isSuspended
+                ? "datasource.tooltip.icon.resume"
+                : "datasource.tooltip.icon.suspend",
+            }),
+            content: i18n.formatMessage(
+              {
+                id: isSuspended
+                  ? "datasource.tooltip.icon.resume.confirm"
+                  : "datasource.tooltip.icon.suspend.confirm",
+              },
+              { tableName: logLibrary.tableName }
+            ),
+            onOk: async () => {
+              const res = isSuspended
+                ? await api.resumeTable(logLibrary.id)
+                : await api.suspendTable(logLibrary.id);
+              if (res.code !== 0) {
+                message.error(res.msg);
+                return;
+              }
+              message.success(res.data);
+              getLogLibraries.run(logLibrary.did);
+            },
+          });
+        },
+        icon: isSuspended ? <PlayCircleOutlined /> : <PauseCircleOutlined />,
+        disabled: !logLibrary.suspendable,
+      },
     ];
     if (logLibrary.v3TableType !== 1) {
       item.push({
@@ -265,6 +308,7 @@ const LogLibraryItem = (props: LogLibraryItemProps) => {
     logLibrary?.id,
     logLibrary.tableName,
     logLibrary.createType,
+    isSuspended,
   ]);
 
   const tooltipTitle = useMemo(
@@ -293,6 +337,23 @@ const LogLibraryItem = (props: LogLibraryItemProps) => {
               : i18n.formatMessage({ id: "alarm.rules.history.isPushed.true" })}
           </div>
         </div>
+        {logLibrary.suspendable && (
+          <div>
+            <div className={logLibraryListStyles.logTipTitle}>
+              {i18n.formatMessage({
+                id: "datasource.logLibrary.ingestion.status",
+              })}
+              :&nbsp;
+              {isSuspended
+                ? i18n.formatMessage({
+                    id: "datasource.logLibrary.ingestion.suspended",
+                  })
+                : i18n.formatMessage({
+                    id: "datasource.logLibrary.ingestion.running",
+                  })}
+            </div>
+          </div>
+        )}
       </div>
     ),
     [logLibrary]
@@ -338,6 +399,11 @@ const LogLibraryItem = (props: LogLibraryItemProps) => {
             className={classNames(logLibraryListStyles.title)}
           >
             {logIcon}
+            {isSuspended && (
+              <PauseCircleOutlined
+                style={{ marginRight: "4px", color: "#faad14" }}
+              />
+            )}
 
             {logLibrary.tableName}
           </span>

@@ -79,3 +79,4 @@ docs/superpowers/
 openspec/*
 tmp/*
 .pensieve/
+api/internal/ui/dist

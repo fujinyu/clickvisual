@@ -86,6 +86,14 @@ type DDLExecutor interface {
 	ExecSQL(sql string) error
 }
 
+// StreamSuspender 可选接口：支持暂停/恢复 Kafka 流表入库的数据源（当前仅 ClickHouse）。
+// 暂停 = DETACH 流表，消费者退出且不提交 offset，消息在 topic 堆积，恢复后补灌。
+// 处理层通过类型断言判断，未实现的数据源给出“不支持”提示。
+type StreamSuspender interface {
+	SuspendStream(tableInfo *db.BaseTable) error
+	ResumeStream(tableInfo *db.BaseTable) error
+}
+
 func TagsToString(alarm *db.Alarm, isMV bool, filterId int) string {
 	tags := alarm.Tags
 	if alarm.Tags == nil || len(alarm.Tags) == 0 {

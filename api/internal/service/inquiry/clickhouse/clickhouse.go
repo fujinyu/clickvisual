@@ -2368,6 +2368,58 @@ func (c *ClickHouseX) rollbackAnyJSON(tid int, original string, mappingFixed int
 	}
 }
 
+// streamTableNameOf returns the quoted Kafka stream table of the log store plus
+// its ON CLUSTER suffix (empty for a non-cluster database).
+func (c *ClickHouseX) streamTableNameOf(tableInfo *db.BaseTable) (name, clusterInfo string, err error) {
+	isCluster, err := c.isCluster(tableInfo.Database.Cluster)
+	if err != nil {
+		return "", "", err
+	}
+	return genStreamNameWithMode(isCluster, tableInfo.Database.Name, tableInfo.Name),
+		genSQLClusterInfo(isCluster, tableInfo.Database.Cluster), nil
+}
+
+// SuspendStream detaches the Kafka stream table of the log store: the consumers
+// leave the group without committing, so messages pile up in the topic and
+// ResumeStream re-reads them.
+//
+// The stream table is the point to detach, not the materialized view: with only
+// the view gone the stream table keeps pulling from Kafka and advances the
+// offsets anyway, which drops the data instead of banking it.
+// Idempotent - "IF EXISTS" makes a repeated call a no-op.
+func (c *ClickHouseX) SuspendStream(tableInfo *db.BaseTable) error {
+	name, clusterInfo, err := c.streamTableNameOf(tableInfo)
+	if err != nil {
+		return err
+	}
+	detachSQL := fmt.Sprintf("DETACH TABLE IF EXISTS %s%s", name, clusterInfo)
+	if _, err = c.db.Exec(detachSQL); err != nil {
+		elog.Error("SuspendStream", elog.String("sql", detachSQL), l.E(err))
+		return errors.Wrap(err, "detach the kafka stream table failed")
+	}
+	return nil
+}
+
+// ResumeStream re-attaches a detached stream table.
+//
+// It deliberately does not use "IF NOT EXISTS": if the table was dropped rather
+// than detached there is no metadata left to attach, and a silent no-op would
+// report success while nothing consumes the topic. The ClickHouse error is the
+// caller's signal to rebuild the collection structure instead.
+func (c *ClickHouseX) ResumeStream(tableInfo *db.BaseTable) error {
+	name, clusterInfo, err := c.streamTableNameOf(tableInfo)
+	if err != nil {
+		return err
+	}
+	attachSQL := fmt.Sprintf("ATTACH TABLE %s%s", name, clusterInfo)
+	if _, err = c.db.Exec(attachSQL); err != nil {
+		elog.Error("ResumeStream", elog.String("sql", attachSQL), l.E(err))
+		return errors.Wrap(err, "attach the kafka stream table failed: it may have been dropped instead of detached, "+
+			"rebuild the collection instead of resuming")
+	}
+	return nil
+}
+
 func (c *ClickHouseX) logsTimelineSQL(param view.ReqQuery, tid int) (sql string) {
 	conds := egorm.Conds{}
 	conds["tid"] = tid
