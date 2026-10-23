@@ -8,6 +8,8 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
+	"github.com/clickvisual/clickvisual/api/internal/invoker"
+	db2 "github.com/clickvisual/clickvisual/api/internal/pkg/model/db"
 	"github.com/clickvisual/clickvisual/api/internal/pkg/model/view"
 	"github.com/clickvisual/clickvisual/api/internal/service/permission/pmsplugin"
 )
@@ -60,6 +62,8 @@ func (s *defaultChecker) Check(reqPms view.ReqPermission) error {
 	var reqRules [][]interface{}
 	reqRules = append(reqRules, pmsplugin.Convert2InterfaceSlice(items.ReqSub, items.ReqObj, items.ReqAct, items.ReqDom))
 	reqRules = append(reqRules, checkAsterisk(reqPms)) // add * permission check
+	// a grant scoped to a database applies to every table it holds
+	reqRules = append(reqRules, parentDatabaseRules(reqPms)...)
 	pmsPassed, err := pmsplugin.EnforceOneInMany(reqRules...)
 	if err != nil {
 		elog.Warn("reqPerm not pass", zap.Error(err))
@@ -80,6 +84,35 @@ func checkAsterisk(reqPms view.ReqPermission) []interface{} {
 	}
 	elog.Debug("Permission", elog.Any("items", items))
 	return pmsplugin.Convert2InterfaceSlice(items.ReqSub, items.ReqObj, items.ReqAct, items.ReqDom)
+}
+
+// parentDatabaseRules re-evaluates the request with the database holding the
+// table as domain, so a grant scoped to a database applies to its tables.
+// Casbin cannot express it in rbac.conf: the g rule of such a grant carries dom
+// "BaseDatabase__did" while a table request carries "BaseTable__tid", and the
+// matcher compares them literally.
+func parentDatabaseRules(reqPms view.ReqPermission) [][]interface{} {
+	if reqPms.DomainType != pmsplugin.PrefixTable {
+		return nil
+	}
+	tid, err := strconv.Atoi(reqPms.DomainId)
+	if err != nil || tid <= 0 {
+		return nil
+	}
+	tableInfo, err := db2.TableInfoX(invoker.Db, map[string]interface{}{"id": tid})
+	if err != nil || tableInfo.Did <= 0 {
+		return nil
+	}
+	reqPms.DomainType = pmsplugin.PrefixDatabase
+	reqPms.DomainId = strconv.Itoa(tableInfo.Did)
+	items, err := getCasbinItemsFromReqPermission(&reqPms)
+	if err != nil {
+		return nil
+	}
+	return [][]interface{}{
+		pmsplugin.Convert2InterfaceSlice(items.ReqSub, items.ReqObj, items.ReqAct, items.ReqDom),
+		checkAsterisk(reqPms),
+	}
 }
 
 // --- below are private materials... used above

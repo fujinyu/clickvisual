@@ -235,7 +235,7 @@ func List(c *core.Context) {
 	)
 	if tid != 0 {
 		table, _ := db2.TableInfo(invoker.Db, tid)
-		if !service.TableViewIsPermission(c.Uid(), table.Database.Iid, tid) {
+		if !service.TableViewIsPermission(c.Uid(), table.Database.Iid, table.Did, tid) {
 			c.JSONE(1, "", constx.ErrPmsCheck)
 			return
 		}

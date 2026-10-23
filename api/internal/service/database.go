@@ -44,7 +44,7 @@ func DatabaseListFilterPms(uid int) (res []view2.RespDatabaseSimple, err error) 
 		if row.Database == nil {
 			continue
 		}
-		if !summary.TableSubVisible(row.Database.Iid, row.ID) {
+		if !summary.TableSubVisible(row.Database.Iid, row.Did, row.ID) {
 			continue
 		}
 		item, ok := dMap[row.Database.ID]
@@ -105,7 +105,7 @@ func DatabaseViewIsPermission(uid, iid, did int) bool {
 		return false
 	}
 	for _, t := range tables {
-		if t.Did == did && summary.TableSubVisible(iid, t.ID) {
+		if t.Did == did && summary.TableSubVisible(iid, did, t.ID) {
 			return true
 		}
 	}

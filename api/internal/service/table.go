@@ -13,13 +13,13 @@ import (
 	"github.com/clickvisual/clickvisual/api/internal/service/permission/pmsplugin"
 )
 
-func TableViewIsPermission(uid, iid, tid int) bool {
+func TableViewIsPermission(uid, iid, did, tid int) bool {
 	// in-memory summary, no db enumeration(see pmsplugin.GetUserViewSummary)
-	return pmsplugin.GetUserViewSummary(uid).TableSubVisible(iid, tid)
+	return pmsplugin.GetUserViewSummary(uid).TableSubVisible(iid, did, tid)
 }
 
-func tableViewIsPermission(uid, iid, tid int, subResource string) bool {
-	return pmsplugin.GetUserViewSummary(uid).TableSubResourceVisible(iid, tid, subResource)
+func tableViewIsPermission(uid, iid, did, tid int, subResource string) bool {
+	return pmsplugin.GetUserViewSummary(uid).TableSubResourceVisible(iid, did, tid, subResource)
 }
 
 func IsCheckInner(createType int) bool {

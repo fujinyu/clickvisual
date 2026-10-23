@@ -236,7 +236,7 @@ func TableList(c *core.Context) {
 	}
 	res := make([]view.RespTableSimple, 0)
 	for _, row := range tableList {
-		if !service.TableViewIsPermission(c.Uid(), row.Database.Iid, row.ID) {
+		if !service.TableViewIsPermission(c.Uid(), row.Database.Iid, did, row.ID) {
 			continue
 		}
 		res = append(res, view.RespTableSimple{

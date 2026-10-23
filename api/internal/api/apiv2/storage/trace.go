@@ -34,7 +34,7 @@ func GetTraceList(c *core.Context) {
 	}
 	res := make([]view2.RespTableSimple, 0)
 	for _, row := range tableList {
-		if !service.TableViewIsPermission(c.Uid(), row.Database.Iid, row.ID) {
+		if !service.TableViewIsPermission(c.Uid(), row.Database.Iid, row.Did, row.ID) {
 			continue
 		}
 		res = append(res, view2.RespTableSimple{

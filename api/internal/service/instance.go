@@ -156,7 +156,7 @@ func ReadAllPermissionTable(uid int) []int {
 	tables, _ := db.TableList(invoker.Db, egorm.Conds{})
 	resArr := make([]int, 0)
 	for _, table := range tables {
-		if !TableViewIsPermission(uid, table.Database.Iid, table.ID) {
+		if !TableViewIsPermission(uid, table.Database.Iid, table.Did, table.ID) {
 			continue
 		}
 		resArr = append(resArr, table.ID)

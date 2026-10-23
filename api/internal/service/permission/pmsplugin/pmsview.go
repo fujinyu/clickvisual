@@ -72,7 +72,8 @@ type UserViewSummary struct {
 	// dbSub/tblSub.
 	instDomSub map[int]map[string]bool
 	// dbSub[did][iid][subResource]: view granted on database did(of instance
-	// iid) through a domain-scoped g rule.
+	// iid) through a domain-scoped g rule. A database grant cascades to every
+	// table it holds, see TableSubResourceVisible.
 	dbSub map[int]map[int]map[string]bool
 	// tblSub[tid][iid][subResource]: view granted on table tid(of instance
 	// iid) through a domain-scoped g rule.
@@ -387,14 +388,26 @@ func (s *UserViewSummary) DatabaseSubVisible(iid, did int) bool {
 }
 
 // TableSubResourceVisible reports whether the user may view subResource of
-// table tid(of instance iid), either instance-wide or through a grant scoped to
-// this very table(mirrors the old tableViewIsPermission).
-func (s *UserViewSummary) TableSubResourceVisible(iid, tid int, subResource string) bool {
+// table tid(of instance iid, of database did): through an instance-wide(g3)
+// grant, through a grant scoped to the database holding the table, or through a
+// grant scoped to this very table.
+//
+// The database cascade is what a database-scoped grant means: the grantee may
+// reach every table under it. Casbin cannot express it(the g rule of such a
+// grant carries dom "BaseDatabase__did", while a table request carries
+// "BaseTable__tid", and the rbac.conf matcher compares them literally), so it
+// is done here - and in permission.defaultChecker.Check for the acting path.
+func (s *UserViewSummary) TableSubResourceVisible(iid, did, tid int, subResource string) bool {
 	if s.root {
 		return true
 	}
 	if subs, ok := s.instG3Sub[iid]; ok && subs[subResource] {
 		return true
+	}
+	if byInst, ok := s.dbSub[did]; ok {
+		if subs, ok := byInst[iid]; ok && subs[subResource] {
+			return true
+		}
 	}
 	byInst, ok := s.tblSub[tid]
 	if !ok {
@@ -406,11 +419,14 @@ func (s *UserViewSummary) TableSubResourceVisible(iid, tid int, subResource stri
 
 // TableSubVisible is TableSubResourceVisible for any view subResource(mirrors
 // service.TableViewIsPermission).
-func (s *UserViewSummary) TableSubVisible(iid, tid int) bool {
+func (s *UserViewSummary) TableSubVisible(iid, did, tid int) bool {
 	if s.root {
 		return true
 	}
 	if anySubVisible(s.instG3Sub, iid) {
+		return true
+	}
+	if byInst, ok := s.dbSub[did]; ok && anySubVisible(byInst, iid) {
 		return true
 	}
 	byInst, ok := s.tblSub[tid]

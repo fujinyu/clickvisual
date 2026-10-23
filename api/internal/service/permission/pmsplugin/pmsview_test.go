@@ -91,7 +91,7 @@ func TestUserViewSummaryInstanceWideGrant(t *testing.T) {
 			s.AnyInstanceSub(Log), s.AnyInstanceSub(Alarm), s.AnyInstanceSub(Pandas))
 	}
 	// an instance-wide grant subsumes every lower level(db/table) check
-	if !s.DatabaseSubVisible(5, 7) || !s.TableSubVisible(5, 99) {
+	if !s.DatabaseSubVisible(5, 7) || !s.TableSubVisible(5, 7, 99) {
 		t.Error("instance-wide grant must imply database/table visibility")
 	}
 	if ids := s.GrantedTableIds(5); len(ids) != 0 {
@@ -124,8 +124,15 @@ func TestUserViewSummaryDatabaseScopedGrant(t *testing.T) {
 	if s.DatabaseSubVisible(6, 7) {
 		t.Error("database 7 must NOT be visible on instance 6(grant belongs to instance 5)")
 	}
-	if s.TableSubVisible(5, 9) {
-		t.Error("no table was granted, TableSubVisible must be false")
+	// the grant cascades: a database-scoped grant reaches every table it holds
+	if !s.TableSubVisible(5, 7, 9) || !s.TableSubResourceVisible(5, 7, 9, Log) {
+		t.Error("table 9 of the granted database 7 must be visible")
+	}
+	if s.TableSubVisible(5, 8, 9) {
+		t.Error("table 9 of the ungranted database 8 must NOT be visible")
+	}
+	if s.TableSubVisible(6, 7, 9) {
+		t.Error("database 7 is granted on instance 5, not on instance 6")
 	}
 	if !s.AnyInstanceSub(Log) {
 		t.Error("AnyInstanceSub(Log) must be true")
@@ -138,13 +145,13 @@ func TestUserViewSummaryTableScopedGrant(t *testing.T) {
 	addG(t, e, 3, "role__7__instance__5", "BaseTable__9")
 	s := buildUserViewSummary(e, 3)
 
-	if !s.TableSubVisible(5, 9) {
+	if !s.TableSubVisible(5, 7, 9) {
 		t.Error("table 9 must be visible(granted)")
 	}
-	if !s.TableSubResourceVisible(5, 9, Log) {
+	if !s.TableSubResourceVisible(5, 7, 9, Log) {
 		t.Error("table 9 Log must be visible")
 	}
-	if s.TableSubVisible(5, 10) || s.TableSubVisible(6, 9) {
+	if s.TableSubVisible(5, 7, 10) || s.TableSubVisible(6, 7, 9) {
 		t.Error("tables other than the granted one must NOT be visible")
 	}
 	// the database itself is not granted: only reachable through its tables,
@@ -172,7 +179,7 @@ func TestUserViewSummaryNoRules(t *testing.T) {
 	if s.AnyInstanceSub(Log) || s.AnyInstanceSub(Alarm) || s.AnyInstanceSub(Pandas) {
 		t.Error("AnyInstanceSub must be false without grants")
 	}
-	if s.DatabaseSubVisible(5, 7) || s.TableSubVisible(5, 9) {
+	if s.DatabaseSubVisible(5, 7) || s.TableSubVisible(5, 7, 9) {
 		t.Error("db/table visibility must be false without grants")
 	}
 	if ids := s.GrantedTableIds(5); len(ids) != 0 {
@@ -193,7 +200,7 @@ func TestUserViewSummaryRootUser(t *testing.T) {
 	if !s.AnyInstanceSub(Log) || !s.AnyInstanceSub(Pandas) {
 		t.Error("root must have every subResource flag")
 	}
-	if !s.DatabaseSubVisible(5, 7) || !s.TableSubVisible(5, 9) {
+	if !s.DatabaseSubVisible(5, 7) || !s.TableSubVisible(5, 7, 9) {
 		t.Error("root must see every database/table")
 	}
 }
@@ -259,7 +266,7 @@ func TestUserViewSummaryStarDomainGrant(t *testing.T) {
 	if !s.AnyInstanceSub(Log) {
 		t.Error("AnyInstanceSub(Log) must be true")
 	}
-	if s.DatabaseSubVisible(5, 7) || s.TableSubVisible(5, 9) {
+	if s.DatabaseSubVisible(5, 7) || s.TableSubVisible(5, 7, 9) {
 		t.Error("a *-domain grant must NOT grant any database/table visibility")
 	}
 	if ids := s.GrantedTableIds(5); len(ids) != 0 {
@@ -294,14 +301,15 @@ func TestUserViewSummaryWildcardUserInstanceGrant(t *testing.T) {
 		t.Error("instance 2 has no wildcard grant and must stay invisible")
 	}
 	// an instance-wide grant subsumes every lower level check
-	if !s.DatabaseSubVisible(1, 7) || !s.TableSubVisible(6, 9) {
+	if !s.DatabaseSubVisible(1, 7) || !s.TableSubVisible(6, 7, 9) {
 		t.Error("wildcard instance-wide grant must imply db/table visibility")
 	}
 }
 
 // TestUserViewSummaryWildcardUserDomainGrant covers a domain-scoped grant held
-// by the wildcard subject: it must make exactly that database visible for
-// every user, and nothing else.
+// by the wildcard subject: it must make that database - and, through the
+// database-to-table cascade, every table of it - visible for every user, and
+// nothing else.
 func TestUserViewSummaryWildcardUserDomainGrant(t *testing.T) {
 	e := newTestEnforcer(t)
 	addPRole(t, e, "10", 2, Log, ActView)
@@ -318,8 +326,11 @@ func TestUserViewSummaryWildcardUserDomainGrant(t *testing.T) {
 	if s.DatabaseSubVisible(2, 8) || s.DatabaseSubVisible(3, 7) {
 		t.Error("only the granted database of the granted instance may be visible")
 	}
-	if s.TableSubVisible(2, 9) {
-		t.Error("no table was granted, TableSubVisible must be false")
+	if !s.TableSubVisible(2, 7, 9) {
+		t.Error("table 9 of the wildcard-granted database 7 must be visible")
+	}
+	if s.TableSubVisible(2, 8, 9) {
+		t.Error("table 9 of the ungranted database 8 must NOT be visible")
 	}
 	if ids := s.GrantedTableIds(2); len(ids) != 0 {
 		t.Errorf("GrantedTableIds(2) = %v, want empty", ids)
