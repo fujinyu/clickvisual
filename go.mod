@@ -3,6 +3,7 @@ module github.com/clickvisual/clickvisual
 go 1.21.1
 
 require (
+	github.com/AfterShip/clickhouse-sql-parser v0.5.6
 	github.com/BurntSushi/toml v1.2.1
 	github.com/ClickHouse/clickhouse-go/v2 v2.3.0
 	github.com/casbin/casbin/v2 v2.51.0
