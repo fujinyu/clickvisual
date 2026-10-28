@@ -108,6 +108,7 @@ export default {
   "logLibraryManagement.table": "Log library",
   "logLibraryManagement.search": "Search log libraries, instances or databases",
   "logLibraryManagement.empty": "No log libraries",
+  "logLibraryManagement.total": "{total} log libraries",
   "logLibraryManagement.loadError": "Failed to load log libraries",
   "logLibraryManagement.selectDatabase": "Please select a database first",
   "logLibraryManagement.delete.title": "Delete log library",

@@ -108,6 +108,7 @@ export default {
   "logLibraryManagement.table": "日志库",
   "logLibraryManagement.search": "搜索日志库、实例或数据库",
   "logLibraryManagement.empty": "暂无日志库",
+  "logLibraryManagement.total": "共 {total} 个日志库",
   "logLibraryManagement.loadError": "日志库列表加载失败",
   "logLibraryManagement.selectDatabase": "请先选择数据库",
   "logLibraryManagement.delete.title": "删除日志库",

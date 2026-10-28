@@ -4,6 +4,7 @@ import api, {
   DatabaseResponse,
   LogLibraryManagementColumn,
   LogLibraryManagementPhysicalTable,
+  LogLibraryManagementTableItem,
 } from "@/services/dataLogs";
 import { CheckRoot } from "@/services/pms";
 import systemSettingApi, { InstanceType } from "@/services/systemSetting";
@@ -36,17 +37,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { history, useIntl } from "umi";
 import styles from "./index.less";
 
-interface LogLibraryRow {
-  id: number;
-  iid: number;
-  tableName: string;
-  instanceName: string;
-  databaseId: number;
-  databaseName: string;
-  desc?: string;
-  suspendable: boolean;
-  suspendStatus: number;
-}
+// Rows come from the server-paged log library endpoint, which already carries
+// the owning instance/database names and the ingestion state per row.
+type LogLibraryRow = LogLibraryManagementTableItem;
+
+type IngestionFilter = "running" | "suspended";
 
 interface InspectorTarget {
   kind: "columns" | "ddl";
@@ -64,8 +59,15 @@ const LogLibraryManagement = () => {
   const [selectedInstance, setSelectedInstance] = useState<number>();
   const [databases, setDatabases] = useState<DatabaseResponse[]>([]);
   const [selectedDatabase, setSelectedDatabase] = useState<number>();
+  const [ingestionFilter, setIngestionFilter] = useState<IngestionFilter>();
   const [keyword, setKeyword] = useState("");
+  // keyword is what is typed; appliedKeyword is what the last request used, so
+  // the backend is not hit on every keystroke.
+  const [appliedKeyword, setAppliedKeyword] = useState("");
   const [rows, setRows] = useState<LogLibraryRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [current, setCurrent] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(false);
   const [inspector, setInspector] = useState<InspectorTarget>();
   const [inspectorLoading, setInspectorLoading] = useState(false);
@@ -98,8 +100,9 @@ const LogLibraryManagement = () => {
     };
   }, []);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  // The tree endpoint is used only to fill the instance dropdown; every row of
+  // the table below now comes from the server-paged log library endpoint.
+  const loadInstances = useCallback(async () => {
     try {
       const res: any = await systemSettingApi.getAllInstances();
       if (res?.code !== 0) {
@@ -109,23 +112,34 @@ const LogLibraryManagement = () => {
         );
         return;
       }
-      const list = res?.data || [];
-      setInstances(list);
-      const flattened: LogLibraryRow[] = [];
-      list.forEach((instance: any) => {
-        (instance.databases || []).forEach((database: any) => {
-          (database.tables || []).forEach((table: any) => {
-            flattened.push({
-              ...table,
-              iid: instance.id,
-              instanceName: instance.name || instance.instanceName,
-              databaseId: database.id,
-              databaseName: database.databaseName || database.name,
-            } as LogLibraryRow);
-          });
-        });
+      setInstances(res?.data || []);
+    } catch (e) {
+      message.error(
+        i18n.formatMessage({ id: "logLibraryManagement.loadError" })
+      );
+    }
+  }, [i18n]);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res: any = await api.getLogLibraryManagementTables({
+        iid: selectedInstance,
+        did: selectedDatabase,
+        kw: appliedKeyword || undefined,
+        ingestionStatus: ingestionFilter,
+        current,
+        pageSize,
       });
-      setRows(flattened);
+      if (res?.code !== 0) {
+        message.error(
+          res?.msg ||
+            i18n.formatMessage({ id: "logLibraryManagement.loadError" })
+        );
+        return;
+      }
+      setRows(res?.data?.list || []);
+      setTotal(res?.data?.total || 0);
     } catch (e) {
       message.error(
         i18n.formatMessage({ id: "logLibraryManagement.loadError" })
@@ -133,7 +147,19 @@ const LogLibraryManagement = () => {
     } finally {
       setLoading(false);
     }
-  }, [i18n]);
+  }, [
+    i18n,
+    selectedInstance,
+    selectedDatabase,
+    appliedKeyword,
+    ingestionFilter,
+    current,
+    pageSize,
+  ]);
+
+  useEffect(() => {
+    if (authorized) loadInstances();
+  }, [authorized, loadInstances]);
 
   useEffect(() => {
     if (authorized) loadData();
@@ -164,18 +190,6 @@ const LogLibraryManagement = () => {
     },
     [i18n]
   );
-
-  const filteredRows = useMemo(() => {
-    const q = keyword.trim().toLowerCase();
-    return rows.filter((row) => {
-      if (selectedInstance && row.iid !== selectedInstance) return false;
-      if (selectedDatabase && row.databaseId !== selectedDatabase) return false;
-      if (!q) return true;
-      return [row.tableName, row.desc, row.instanceName, row.databaseName]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(q));
-    });
-  }, [rows, selectedInstance, selectedDatabase, keyword]);
 
   const confirmDelete = (record: any) => {
     Modal.confirm({
@@ -255,12 +269,19 @@ const LogLibraryManagement = () => {
     });
   };
 
-  // Selection is derived from the full list so a refresh keeps it, but the
-  // filters clear it: acting on rows the operator no longer sees is how a batch
+  // Selection only ever covers the current page, and is dropped whenever the
+  // query changes: acting on rows the operator no longer sees is how a batch
   // pauses the wrong log library.
   useEffect(() => {
     setSelectedRowKeys([]);
-  }, [selectedInstance, selectedDatabase, keyword]);
+  }, [
+    selectedInstance,
+    selectedDatabase,
+    ingestionFilter,
+    appliedKeyword,
+    current,
+    pageSize,
+  ]);
 
   const selectedRows = useMemo(() => {
     const keys = new Set(selectedRowKeys);
@@ -484,6 +505,7 @@ const LogLibraryManagement = () => {
           onChange={(value) => {
             setSelectedInstance(value);
             fetchDatabases(value);
+            setCurrent(1);
           }}
           options={instances.map((item: any) => ({
             value: item.id,
@@ -497,21 +519,64 @@ const LogLibraryManagement = () => {
             id: "logLibraryManagement.database",
           })}
           value={selectedDatabase}
-          onChange={setSelectedDatabase}
+          onChange={(value) => {
+            setSelectedDatabase(value);
+            setCurrent(1);
+          }}
           options={databases.map((item) => ({
             value: item.id,
             label: item.name || (item as any).databaseName,
           }))}
         />
-        <Input
+        <Select
+          allowClear
+          placeholder={i18n.formatMessage({
+            id: "datasource.logLibrary.ingestion.status",
+          })}
+          value={ingestionFilter}
+          onChange={(value) => {
+            setIngestionFilter(value);
+            setCurrent(1);
+          }}
+          options={[
+            {
+              value: "running",
+              label: i18n.formatMessage({
+                id: "datasource.logLibrary.ingestion.running",
+              }),
+            },
+            {
+              value: "suspended",
+              label: i18n.formatMessage({
+                id: "datasource.logLibrary.ingestion.suspended",
+              }),
+            },
+          ]}
+        />
+        <Input.Search
           allowClear
           value={keyword}
-          onChange={(event) => setKeyword(event.target.value)}
+          onChange={(event) => {
+            setKeyword(event.target.value);
+            // Clearing the box is an explicit "no keyword", so it must re-query
+            // immediately instead of waiting for Enter.
+            if (!event.target.value) setAppliedKeyword("");
+          }}
+          onSearch={(value) => {
+            setAppliedKeyword(value.trim());
+            setCurrent(1);
+          }}
           placeholder={i18n.formatMessage({
             id: "logLibraryManagement.search",
           })}
         />
-        <Button icon={<ReloadOutlined />} onClick={loadData}>
+        <Button
+          icon={<ReloadOutlined />}
+          onClick={() => {
+            loadInstances();
+            loadData();
+          }}
+        >
           {i18n.formatMessage({ id: "table.column.filter.refresh" })}
         </Button>
         <Button
@@ -535,8 +600,22 @@ const LogLibraryManagement = () => {
         <Table
           rowKey="id"
           loading={loading}
-          dataSource={filteredRows}
-          pagination={{ pageSize: 20 }}
+          dataSource={rows}
+          pagination={{
+            current,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            showTotal: (count) =>
+              i18n.formatMessage(
+                { id: "logLibraryManagement.total" },
+                { total: count }
+              ),
+            onChange: (nextPage, nextSize) => {
+              setCurrent(nextPage);
+              setPageSize(nextSize);
+            },
+          }}
           rowSelection={{
             selectedRowKeys,
             onChange: (keys) => setSelectedRowKeys(keys as number[]),

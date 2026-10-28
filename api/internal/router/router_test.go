@@ -146,6 +146,7 @@ func TestLogLibraryManagementRoutesAreRootOnly(t *testing.T) {
 		{method: http.MethodPost, path: "/api/v1/log-library-management/storage/:template"},
 		{method: http.MethodPost, path: "/api/v1/log-library-management/instances/:iid/tables-exist"},
 		{method: http.MethodPost, path: "/api/v1/log-library-management/instances/:iid/tables-exist-batch"},
+		{method: http.MethodGet, path: "/api/v1/log-library-management/tables"},
 		{method: http.MethodDelete, path: "/api/v1/log-library-management/tables/:id"},
 		{method: http.MethodGet, path: "/api/v1/log-library-management/instances/:iid/databases/:database/tables/:table/columns"},
 		{method: http.MethodGet, path: "/api/v1/log-library-management/instances/:iid/databases/:database/tables/:table/ddl"},

@@ -1,6 +1,8 @@
 package db
 
 import (
+	"strings"
+
 	"github.com/ego-component/egorm"
 	"github.com/gotomicro/ego/core/elog"
 	"github.com/pkg/errors"
@@ -166,6 +168,88 @@ func TableListByInstanceId(db *gorm.DB, iid int) (resp []*BaseTable, err error) 
 			continue
 		}
 		resp = append(resp, tables...)
+	}
+	return
+}
+
+// LogLibraryTableRow is one log library flattened together with the names of the
+// database and instance owning it, which is the shape the log management list
+// needs. Kept separate from BaseTable because the list never touches the
+// ClickHouse settings carried by the entity.
+type LogLibraryTableRow struct {
+	Id            int    `gorm:"column:id"`
+	Did           int    `gorm:"column:did"`
+	Iid           int    `gorm:"column:iid"`
+	InstanceName  string `gorm:"column:instance_name"`
+	DatabaseName  string `gorm:"column:database_name"`
+	TableName     string `gorm:"column:table_name"`
+	Desc          string `gorm:"column:table_desc"`
+	CreateType    int    `gorm:"column:create_type"`
+	SuspendStatus int    `gorm:"column:suspend_status"`
+}
+
+// ReqLogLibraryTableList holds the list filters. Every one of them is pushed
+// down as a bound parameter so the browser never receives rows it filtered out.
+type ReqLogLibraryTableList struct {
+	Iid int
+	Did int
+	Kw  string
+	// CreateTypes restricts the rows to a create-type set, empty meaning any.
+	CreateTypes []int
+	// SuspendStatus is nil for any state, otherwise an exact match.
+	SuspendStatus *int
+	Current       int
+	PageSize      int
+}
+
+// TableListPageForLogLibrary returns one page of log libraries across all
+// instances. The instance name is not on cv_base_table, so the owning database
+// and instance are joined in rather than looked up per row; both joins are
+// many-to-one, which keeps the count equal to the number of table rows.
+func TableListPageForLogLibrary(invoker *gorm.DB, req ReqLogLibraryTableList) (total int64, resp []*LogLibraryTableRow, err error) {
+	resp = make([]*LogLibraryTableRow, 0)
+	query := invoker.Table(TableNameBaseTable + " AS t").
+		Select("t.id, t.did, t.name AS table_name, t.`desc` AS table_desc, t.create_type, t.suspend_status, " +
+			"d.iid, d.name AS database_name, i.name AS instance_name").
+		Joins("LEFT JOIN " + TableNameBaseDatabase + " AS d ON d.id = t.did").
+		Joins("LEFT JOIN " + TableNameBaseInstance + " AS i ON i.id = d.iid")
+	where := make([]string, 0, 5)
+	binds := make([]interface{}, 0, 8)
+	if req.Iid > 0 {
+		where = append(where, "d.iid = ?")
+		binds = append(binds, req.Iid)
+	}
+	if req.Did > 0 {
+		where = append(where, "t.did = ?")
+		binds = append(binds, req.Did)
+	}
+	if kw := strings.TrimSpace(req.Kw); kw != "" {
+		like := "%" + kw + "%"
+		where = append(where, "(t.name LIKE ? OR t.`desc` LIKE ? OR d.name LIKE ? OR i.name LIKE ?)")
+		binds = append(binds, like, like, like, like)
+	}
+	if len(req.CreateTypes) > 0 {
+		holders := make([]string, 0, len(req.CreateTypes))
+		for _, createType := range req.CreateTypes {
+			holders = append(holders, "?")
+			binds = append(binds, createType)
+		}
+		where = append(where, "t.create_type IN ("+strings.Join(holders, ",")+")")
+	}
+	if req.SuspendStatus != nil {
+		where = append(where, "t.suspend_status = ?")
+		binds = append(binds, *req.SuspendStatus)
+	}
+	if len(where) > 0 {
+		query = query.Where(strings.Join(where, " AND "), binds...)
+	}
+	if err = query.Count(&total).Error; err != nil {
+		return 0, resp, errors.Wrap(err, "count log libraries failed")
+	}
+	if err = query.Order("t.id asc").
+		Offset((req.Current - 1) * req.PageSize).Limit(req.PageSize).
+		Find(&resp).Error; err != nil {
+		return total, resp, errors.Wrap(err, "list log libraries failed")
 	}
 	return
 }

@@ -400,6 +400,24 @@ func TableResume(c *core.Context) {
 	c.JSONOK("ingestion resumed: the backlog of the topic is being re-ingested")
 }
 
+// LogLibraryManagementTableList
+// @Tags         LOGSTORE
+// @Summary      日志管理页日志库分页列表（过滤与分页均在元数据库完成）
+// @Router       /api/v1/log-library-management/tables [get]
+func LogLibraryManagementTableList(c *core.Context) {
+	var req view.ReqLogLibraryManagementTableList
+	if err := c.Bind(&req); err != nil {
+		c.JSONE(1, "invalid parameter: "+err.Error(), nil)
+		return
+	}
+	res, err := service.LogLibraryManagementTableList(req)
+	if err != nil {
+		c.JSONE(core.CodeErr, err.Error(), nil)
+		return
+	}
+	c.JSONOK(res)
+}
+
 // TableLogs
 // @Tags         LOGSTORE
 // @Summary	 	 日志搜索

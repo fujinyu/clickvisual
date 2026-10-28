@@ -228,6 +228,37 @@ type (
 	}
 )
 
+// ReqLogLibraryManagementTableList 日志管理页的扁平日志库列表查询条件。
+// IngestionStatus 为空表示不限；running 只保留有 Kafka 流表且未暂停的库；
+// suspended 只保留已暂停的库。
+type ReqLogLibraryManagementTableList struct {
+	Current         int    `form:"current"`
+	PageSize        int    `form:"pageSize"`
+	Iid             int    `form:"iid"`
+	Did             int    `form:"did"`
+	Kw              string `form:"kw"`
+	IngestionStatus string `form:"ingestionStatus"`
+}
+
+type RespLogLibraryManagementTableItem struct {
+	Id            int    `json:"id"`
+	Iid           int    `json:"iid"`
+	Did           int    `json:"did"`
+	InstanceName  string `json:"instanceName"`
+	DatabaseName  string `json:"databaseName"`
+	TableName     string `json:"tableName"`
+	Desc          string `json:"desc"`
+	Suspendable   bool   `json:"suspendable"`
+	SuspendStatus int    `json:"suspendStatus"`
+}
+
+type RespLogLibraryManagementTableList struct {
+	List     []RespLogLibraryManagementTableItem `json:"list"`
+	Total    int64                               `json:"total"`
+	Current  int                                 `json:"current"`
+	PageSize int                                 `json:"pageSize"`
+}
+
 type RespTableDetail struct {
 	Did                     int    `json:"did"`     // 数据库 id
 	Name                    string `json:"name"`    // table

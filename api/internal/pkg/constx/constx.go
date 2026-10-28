@@ -17,14 +17,25 @@ const (
 	UBWKafkaStreamField = "body"
 )
 
+// KafkaPipelineCreateTypes is the create-type set behind IsKafkaPipelineTable,
+// exposed as a list so a metadata-database filter can push the same predicate
+// down as "create_type IN (?,..)" instead of re-spelling the constants.
+var KafkaPipelineCreateTypes = []int{
+	TableCreateTypeCV,
+	TableCreateTypeJSONEachRow,
+	TableCreateTypeUBW,
+	TableCreateTypeJSONAsString,
+}
+
 // IsKafkaPipelineTable reports whether ClickVisual feeds the log store through a
 // Kafka stream table plus materialized view - the only shape that can be
 // suspended. Self-built(1), trace-calculation(4) and buffer-null(5) tables have
 // no stream table to detach. Same set as RebuildStorageInt64 accepts.
 func IsKafkaPipelineTable(createType int) bool {
-	switch createType {
-	case TableCreateTypeCV, TableCreateTypeJSONEachRow, TableCreateTypeUBW, TableCreateTypeJSONAsString:
-		return true
+	for _, t := range KafkaPipelineCreateTypes {
+		if t == createType {
+			return true
+		}
 	}
 	return false
 }

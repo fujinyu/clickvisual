@@ -203,6 +203,25 @@ export interface LogLibraryManagementInspectResponse {
   tables: LogLibraryManagementPhysicalTable[];
 }
 
+export interface LogLibraryManagementTableItem {
+  id: number;
+  iid: number;
+  did: number;
+  instanceName: string;
+  databaseName: string;
+  tableName: string;
+  desc: string;
+  suspendable: boolean;
+  suspendStatus: number;
+}
+
+export interface LogLibraryManagementTableListResponse {
+  list: LogLibraryManagementTableItem[];
+  total: number;
+  current: number;
+  pageSize: number;
+}
+
 export interface LogLibraryCopyResult {
   total: number;
   copied: number;
@@ -824,6 +843,24 @@ export default {
       process.env.PUBLIC_PATH + `api/v2/storage/${storageId}/columns`,
       {
         method: "GET",
+      }
+    );
+  },
+
+  // Root-only flat log library list, filtered and paged by the metadata database
+  async getLogLibraryManagementTables(params: {
+    iid?: number;
+    did?: number;
+    kw?: string;
+    ingestionStatus?: string;
+    current: number;
+    pageSize: number;
+  }) {
+    return request<API.Res<LogLibraryManagementTableListResponse>>(
+      process.env.PUBLIC_PATH + `api/v1/log-library-management/tables`,
+      {
+        method: "GET",
+        params,
       }
     );
   },

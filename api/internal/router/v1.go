@@ -44,6 +44,7 @@ func v1(r *gin.RouterGroup) {
 	rootGroup.POST("/log-library-management/storage/:template", core.Handle(storagev2.CreateStorageByTemplate))
 	rootGroup.POST("/log-library-management/instances/:iid/tables-exist", core.Handle(base.TableCreateSelfBuilt))
 	rootGroup.POST("/log-library-management/instances/:iid/tables-exist-batch", core.Handle(base.TableCreateSelfBuiltBatch))
+	rootGroup.GET("/log-library-management/tables", core.Handle(base.LogLibraryManagementTableList))
 	rootGroup.DELETE("/log-library-management/tables/:id", core.Handle(base.TableDelete))
 	rootGroup.POST("/log-library-management/tables/:id/suspend", core.Handle(base.TableSuspend))
 	rootGroup.POST("/log-library-management/tables/:id/resume", core.Handle(base.TableResume))

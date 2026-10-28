@@ -75,6 +75,67 @@ func TableResume(tid int) error {
 	})
 }
 
+// LogLibraryManagementTableList answers the log management page with one page of
+// log libraries, flattened across instances and filtered inside the metadata
+// database. The route sits behind RootChecker, so unlike the shared instance
+// tree no per-user permission narrowing happens here.
+func LogLibraryManagementTableList(req view.ReqLogLibraryManagementTableList) (res view.RespLogLibraryManagementTableList, err error) {
+	res.List = make([]view.RespLogLibraryManagementTableItem, 0)
+	res.Current = req.Current
+	if res.Current < 1 {
+		res.Current = 1
+	}
+	res.PageSize = req.PageSize
+	switch {
+	case res.PageSize < 1:
+		res.PageSize = 20
+	case res.PageSize > 200:
+		// Bound the page: the list joins three tables and the caller is a browser.
+		res.PageSize = 200
+	}
+	dbReq := db.ReqLogLibraryTableList{
+		Iid:      req.Iid,
+		Did:      req.Did,
+		Kw:       req.Kw,
+		Current:  res.Current,
+		PageSize: res.PageSize,
+	}
+	switch req.IngestionStatus {
+	case "":
+	case "running":
+		// Self-built tables are excluded on purpose: they have no ingestion that
+		// could be running, and the page renders them as "-" rather than as a
+		// running log store.
+		dbReq.CreateTypes = constx.KafkaPipelineCreateTypes
+		attached := db.SuspendStatusAttached
+		dbReq.SuspendStatus = &attached
+	case "suspended":
+		detached := db.SuspendStatusDetached
+		dbReq.SuspendStatus = &detached
+	default:
+		return res, errors.Errorf("unknown ingestionStatus: %s", req.IngestionStatus)
+	}
+	total, rows, err := db.TableListPageForLogLibrary(invoker.Db, dbReq)
+	if err != nil {
+		return res, err
+	}
+	res.Total = total
+	for _, row := range rows {
+		res.List = append(res.List, view.RespLogLibraryManagementTableItem{
+			Id:            row.Id,
+			Iid:           row.Iid,
+			Did:           row.Did,
+			InstanceName:  row.InstanceName,
+			DatabaseName:  row.DatabaseName,
+			TableName:     row.TableName,
+			Desc:          row.Desc,
+			Suspendable:   constx.IsKafkaPipelineTable(row.CreateType),
+			SuspendStatus: row.SuspendStatus,
+		})
+	}
+	return res, nil
+}
+
 // loadSuspendableTable rejects the log stores which have no Kafka stream table
 // to detach: self-built, trace calculation and buffer-null tables.
 func loadSuspendableTable(tid int) (*db.BaseTable, error) {
