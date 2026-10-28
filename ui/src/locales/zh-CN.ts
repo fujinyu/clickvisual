@@ -115,6 +115,15 @@ export default {
     "即将删除实例“{instance}”数据库“{database}”中的日志库“{name}”。此操作将删除物理表，并可能影响关联告警，确定继续吗？",
   "logLibraryManagement.delete.success": "日志库删除成功",
   "logLibraryManagement.delete.error": "日志库删除失败",
+  "logLibraryManagement.suspend.error": "入库状态切换失败",
+  "logLibraryManagement.batch.suspend": "批量暂停入库",
+  "logLibraryManagement.batch.resume": "批量恢复入库",
+  "logLibraryManagement.batch.suspend.confirm":
+    "将对已选的 {count} 个日志库暂停入库，消息在 Kafka topic 中堆积且不丢失。确认执行？",
+  "logLibraryManagement.batch.resume.confirm":
+    "将对已选的 {count} 个日志库恢复入库，从已提交位点继续消费并补灌堆积消息。确认执行？",
+  "logLibraryManagement.batch.allSuccess": "已处理 {count} 个日志库",
+  "logLibraryManagement.batch.partial": "成功 {succeeded} 个，失败 {failed} 个：{names}",
   "logLibraryManagement.forbidden": "仅管理员可访问日志管理",
   "logLibraryManagement.backToQuery": "返回日志查询",
   "logLibraryManagement.schema": "查看结构",

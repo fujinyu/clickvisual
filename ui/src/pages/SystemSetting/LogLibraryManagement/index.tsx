@@ -12,6 +12,8 @@ import {
   CopyOutlined,
   DeleteOutlined,
   EyeOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
   PlusOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
@@ -42,6 +44,8 @@ interface LogLibraryRow {
   databaseId: number;
   databaseName: string;
   desc?: string;
+  suspendable: boolean;
+  suspendStatus: number;
 }
 
 interface InspectorTarget {
@@ -69,6 +73,7 @@ const LogLibraryManagement = () => {
   const [tables, setTables] = useState<LogLibraryManagementPhysicalTable[]>([]);
   const [activeTable, setActiveTable] = useState("");
   const [copyModalOpen, setCopyModalOpen] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
   const {
     onChangeAddLogToDatabase,
     onChangeLogLibraryCreatedModalVisible,
@@ -206,6 +211,132 @@ const LogLibraryManagement = () => {
           );
         }
       },
+    });
+  };
+
+  const confirmSuspend = (record: LogLibraryRow) => {
+    const resumes = record.suspendStatus === 1;
+    Modal.confirm({
+      title: i18n.formatMessage({
+        id: resumes
+          ? "datasource.tooltip.icon.resume"
+          : "datasource.tooltip.icon.suspend",
+      }),
+      content: i18n.formatMessage(
+        {
+          id: resumes
+            ? "datasource.tooltip.icon.resume.confirm"
+            : "datasource.tooltip.icon.suspend.confirm",
+        },
+        { tableName: record.tableName }
+      ),
+      okText: i18n.formatMessage({ id: "button.ok" }),
+      cancelText: i18n.formatMessage({ id: "button.cancel" }),
+      onOk: async () => {
+        try {
+          const res = resumes
+            ? await api.resumeTable(record.id)
+            : await api.suspendTable(record.id);
+          if (res?.code !== 0) {
+            message.error(
+              res?.msg ||
+                i18n.formatMessage({ id: "logLibraryManagement.suspend.error" })
+            );
+            return;
+          }
+          message.success(res.data);
+          await loadData();
+        } catch (error) {
+          message.error(
+            i18n.formatMessage({ id: "logLibraryManagement.suspend.error" })
+          );
+        }
+      },
+    });
+  };
+
+  // Selection is derived from the full list so a refresh keeps it, but the
+  // filters clear it: acting on rows the operator no longer sees is how a batch
+  // pauses the wrong log library.
+  useEffect(() => {
+    setSelectedRowKeys([]);
+  }, [selectedInstance, selectedDatabase, keyword]);
+
+  const selectedRows = useMemo(() => {
+    const keys = new Set(selectedRowKeys);
+    return rows.filter((row) => keys.has(row.id) && row.suspendable);
+  }, [rows, selectedRowKeys]);
+
+  const suspendTargets = useMemo(
+    () => selectedRows.filter((row) => row.suspendStatus !== 1),
+    [selectedRows]
+  );
+  const resumeTargets = useMemo(
+    () => selectedRows.filter((row) => row.suspendStatus === 1),
+    [selectedRows]
+  );
+
+  const runBatch = async (targets: LogLibraryRow[], suspends: boolean) => {
+    const failed: string[] = [];
+    let succeeded = 0;
+    // Sequential on purpose: every call is a ClickHouse DDL statement on the
+    // same instance, and a failure must not be hidden behind a parallel burst.
+    for (const row of targets) {
+      try {
+        const res = suspends
+          ? await api.suspendTable(row.id)
+          : await api.resumeTable(row.id);
+        if (res?.code !== 0) {
+          failed.push(row.tableName);
+          continue;
+        }
+        succeeded += 1;
+      } catch (error) {
+        failed.push(row.tableName);
+      }
+    }
+    setSelectedRowKeys([]);
+    await loadData();
+    if (failed.length === 0) {
+      message.success(
+        i18n.formatMessage(
+          { id: "logLibraryManagement.batch.allSuccess" },
+          { count: succeeded }
+        )
+      );
+    } else {
+      message.error(
+        i18n.formatMessage(
+          { id: "logLibraryManagement.batch.partial" },
+          {
+            succeeded,
+            failed: failed.length,
+            names: failed.join(", "),
+          }
+        )
+      );
+    }
+  };
+
+  const confirmBatch = (suspends: boolean) => {
+    const targets = suspends ? suspendTargets : resumeTargets;
+    Modal.confirm({
+      title: i18n.formatMessage({
+        id: suspends
+          ? "datasource.tooltip.icon.suspend"
+          : "datasource.tooltip.icon.resume",
+      }),
+      content: i18n.formatMessage(
+        {
+          id: suspends
+            ? "logLibraryManagement.batch.suspend.confirm"
+            : "logLibraryManagement.batch.resume.confirm",
+        },
+        { count: targets.length }
+      ),
+      okText: i18n.formatMessage({ id: "button.ok" }),
+      cancelText: i18n.formatMessage({ id: "button.cancel" }),
+      onOk: () => runBatch(targets, suspends),
     });
   };
 
@@ -383,6 +514,22 @@ const LogLibraryManagement = () => {
         <Button icon={<ReloadOutlined />} onClick={loadData}>
           {i18n.formatMessage({ id: "table.column.filter.refresh" })}
         </Button>
+        <Button
+          icon={<PauseCircleOutlined />}
+          disabled={suspendTargets.length === 0}
+          onClick={() => confirmBatch(true)}
+        >
+          {i18n.formatMessage({ id: "logLibraryManagement.batch.suspend" })}
+          {suspendTargets.length > 0 ? ` (${suspendTargets.length})` : ""}
+        </Button>
+        <Button
+          icon={<PlayCircleOutlined />}
+          disabled={resumeTargets.length === 0}
+          onClick={() => confirmBatch(false)}
+        >
+          {i18n.formatMessage({ id: "logLibraryManagement.batch.resume" })}
+          {resumeTargets.length > 0 ? ` (${resumeTargets.length})` : ""}
+        </Button>
       </div>
       <div className={styles.content}>
         <Table
@@ -390,6 +537,13 @@ const LogLibraryManagement = () => {
           loading={loading}
           dataSource={filteredRows}
           pagination={{ pageSize: 20 }}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: (keys) => setSelectedRowKeys(keys as number[]),
+            getCheckboxProps: (record: LogLibraryRow) => ({
+              disabled: !record.suspendable,
+            }),
+          }}
           locale={{
             emptyText: (
               <Empty
@@ -423,9 +577,34 @@ const LogLibraryManagement = () => {
               render: (value: string) => value || "-",
             },
             {
+              title: i18n.formatMessage({
+                id: "datasource.logLibrary.ingestion.status",
+              }),
+              key: "ingestionStatus",
+              width: 110,
+              render: (_: unknown, record: LogLibraryRow) => {
+                if (!record.suspendable) return "-";
+                const suspended = record.suspendStatus === 1;
+                return (
+                  <>
+                    {suspended ? (
+                      <PauseCircleOutlined
+                        style={{ marginRight: 4, color: "#faad14" }}
+                      />
+                    ) : null}
+                    {i18n.formatMessage({
+                      id: suspended
+                        ? "datasource.logLibrary.ingestion.suspended"
+                        : "datasource.logLibrary.ingestion.running",
+                    })}
+                  </>
+                );
+              },
+            },
+            {
               title: i18n.formatMessage({ id: "operation" }),
               key: "actions",
-              width: 280,
+              width: 360,
               render: (_: unknown, record: LogLibraryRow) => (
                 <>
                   <Button
@@ -441,6 +620,25 @@ const LogLibraryManagement = () => {
                     onClick={() => openInspector("ddl", record)}
                   >
                     {i18n.formatMessage({ id: "logLibraryManagement.ddl" })}
+                  </Button>
+                  <Button
+                    type="link"
+                    icon={
+                      record.suspendStatus === 1 ? (
+                        <PlayCircleOutlined />
+                      ) : (
+                        <PauseCircleOutlined />
+                      )
+                    }
+                    disabled={!record.suspendable}
+                    onClick={() => confirmSuspend(record)}
+                  >
+                    {i18n.formatMessage({
+                      id:
+                        record.suspendStatus === 1
+                          ? "datasource.tooltip.icon.resume"
+                          : "datasource.tooltip.icon.suspend",
+                    })}
                   </Button>
                   <Button
                     danger

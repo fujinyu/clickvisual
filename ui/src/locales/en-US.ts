@@ -115,6 +115,16 @@ export default {
     "You are deleting log library “{name}” in database “{database}” on instance “{instance}”. This removes the physical table and may affect alarms. Continue?",
   "logLibraryManagement.delete.success": "Log library deleted",
   "logLibraryManagement.delete.error": "Failed to delete log library",
+  "logLibraryManagement.suspend.error": "Failed to change ingestion status",
+  "logLibraryManagement.batch.suspend": "Pause ingestion (batch)",
+  "logLibraryManagement.batch.resume": "Resume ingestion (batch)",
+  "logLibraryManagement.batch.suspend.confirm":
+    "Pause ingestion for the {count} selected log libraries? Messages keep piling up in the Kafka topic without being lost. Continue?",
+  "logLibraryManagement.batch.resume.confirm":
+    "Resume ingestion for the {count} selected log libraries? ClickHouse continues from the committed offset and backfills the piled-up messages. Continue?",
+  "logLibraryManagement.batch.allSuccess": "{count} log libraries processed",
+  "logLibraryManagement.batch.partial":
+    "{succeeded} succeeded, {failed} failed: {names}",
   "logLibraryManagement.forbidden":
     "Only administrators can access log management",
   "logLibraryManagement.backToQuery": "Back to log query",
