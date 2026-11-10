@@ -1,6 +1,7 @@
 package base
 
 import (
+	"errors"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -221,5 +222,60 @@ func TestLogLibraryMetadataNeedsInt64Fix(t *testing.T) {
 		if got != c.expected {
 			t.Fatalf("%s: logLibraryMetadataNeedsInt64Fix() = %v, want %v", c.name, got, c.expected)
 		}
+	}
+}
+
+func TestSuspendCopiedStream(t *testing.T) {
+	cases := []struct {
+		name       string
+		createType int
+		tid        int
+		suspendErr error
+		wantCalls  int
+	}{
+		{
+			name:       "kafka pipeline copy is suspended once",
+			createType: constx.TableCreateTypeJSONEachRow,
+			tid:        42,
+			wantCalls:  1,
+		},
+		{
+			name:       "self-built copy is left consuming",
+			createType: constx.TableCreateTypeExist,
+			tid:        42,
+			wantCalls:  0,
+		},
+		{
+			name:       "trace calculation copy is left consuming",
+			createType: constx.TableCreateTypeTraceCalculation,
+			tid:        7,
+			wantCalls:  0,
+		},
+		{
+			// A failed DETACH must not fail the copy: the stream stays attached
+			// and consuming, which is only logged, so the error is swallowed.
+			name:       "suspend failure is tolerated",
+			createType: constx.TableCreateTypeCV,
+			tid:        9,
+			suspendErr: errors.New("detach failed"),
+			wantCalls:  1,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			calls := 0
+			gotTid := 0
+			suspendCopiedStream(&db.BaseTable{CreateType: c.createType}, c.tid, func(tid int) error {
+				calls++
+				gotTid = tid
+				return c.suspendErr
+			})
+			if calls != c.wantCalls {
+				t.Fatalf("suspend call count = %d, want %d", calls, c.wantCalls)
+			}
+			if c.wantCalls == 1 && gotTid != c.tid {
+				t.Fatalf("suspend called with tid = %d, want %d", gotTid, c.tid)
+			}
+		})
 	}
 }

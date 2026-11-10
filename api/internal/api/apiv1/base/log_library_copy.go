@@ -323,6 +323,7 @@ func copyLogLibrary(uid int, sourceTable *db.BaseTable, sourceDatabase, targetDa
 		return copyOutcomeDone, errors.Wrap(fixErr, "check collection structure")
 	}
 	if !needsFix {
+		suspendCopiedStream(sourceTable, targetTable.ID, service.TableSuspend)
 		return copyOutcomeDone, nil
 	}
 	rebuilder, ok := targetOp.(factory.StorageRebuilder)
@@ -334,7 +335,27 @@ func copyLogLibrary(uid int, sourceTable *db.BaseTable, sourceDatabase, targetDa
 		rollbackCopiedLogLibrary(executor, targetDatabase, targetTable.ID, refs)
 		return copyOutcomeDone, errors.Wrap(err, "rebuild collection structure")
 	}
+	suspendCopiedStream(sourceTable, targetTable.ID, service.TableSuspend)
 	return copyOutcomeFixed, nil
+}
+
+// suspendCopiedStream pauses a freshly copied kafka pipeline log library so the
+// copy does not immediately double the consumption of the same topic: every copy
+// gets its own "<db>_<table>" consumer group, so an attached copy pulls the whole
+// topic alongside the source and floods its target table with tiny parts. The
+// copy is therefore born suspended and is resumed from the UI when wanted.
+// suspend is injectable for tests; in production it is service.TableSuspend.
+// Best-effort: a failed DETACH leaves the copy attached and consuming, which is
+// logged but must not fail an otherwise successful copy. It must run AFTER any
+// RebuildStorageInt64, which recreates the stream table attached and would
+// otherwise undo the pause.
+func suspendCopiedStream(sourceTable *db.BaseTable, tid int, suspend func(int) error) {
+	if !logLibraryIsKafkaPipeline(sourceTable) {
+		return
+	}
+	if err := suspend(tid); err != nil {
+		elog.Error("suspendCopiedStream", elog.Int("tid", tid), elog.FieldErr(err))
+	}
 }
 
 // logLibraryStructureNeedsFix reports whether the "rebuild collection
